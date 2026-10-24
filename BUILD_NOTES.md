@@ -44,9 +44,52 @@ $ ./build/pfstool extract /tmp/test.pfs /tmp/pfsout
 **踩过的两个坑**：索引尾部少写 u32（声明长度与实际不符 → 偏移全错）；密钥哈希漏了索引
 开头的 count（解密后内容对不上）。
 
+## 已完成：`.ast` 剧本脚本（第二层）
+
+**关键发现**：Artemis 的剧本是**文本**，不是字节码——`root/script/*.ast` 是一个
+赋值树（`astver = "2.0"`、`text = { "start" = { ... } }`），文本里的 `[123]` 是
+运行时动作标记（停顿/控制）。
+
+```
+artemis/
+  src/ast.h src/ast.cpp    词法 + 递归下降解析 + 回写
+  tools/asttool.cpp        dump / roundtrip / selftest
+  docs/AST.md              语法记录
+```
+
+**自证（不需要游戏数据）**：
+```bash
+$ ./build/asttool selftest
+script: 211 byte(s)
+all passed          # 含 CRLF 版本和单行脚本
+```
+
+不变量：**parse → dump → parse 不丢信息**（两棵树的标准形式必须相等）。
+
+```bash
+$ ./build/asttool dump /tmp/sample.ast
+astver = "2.0"
+text = {
+	start = {
+		name = "start"
+		lines = {
+			"俺たちの新しい日常が、ここから始まる。"
+			[12]
+			"二行目"
+		}
+		volume = 128
+	}
+}
+```
+
+**踩过的坑**：块里的键可以是**带引号的字符串**（`"start" = {`），我第一版只认裸标识符
+作键，直接报错；块是字典还是列表要**逐条判断**，因为同一个文件里两种写法混用。
+
 ## 下一步
 
-1. `.ast` 脚本字节码：头、指令集、场景结构（`docs/AST.md`）
+1. 弄清 `.ast` 里各个键的**语义**（哪些是场景名、哪些是台词、tag 如何驱动文本）
+   —— 这一步需要真实游戏脚本来对照
+2. `.iet` 图像格式
 2. `.iet` 图像格式
 3. 运行时骨架：脚本 VM + 画面层
 4. 需要真实 Artemis 游戏数据才能验收

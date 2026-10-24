@@ -14,9 +14,11 @@ if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_library(artemis STATIC src/pfs.cpp)
+add_library(artemis STATIC src/pfs.cpp src/ast.cpp)
 target_include_directories(artemis PUBLIC src)
 target_link_libraries(artemis PUBLIC "-framework CoreFoundation")
 
 add_executable(pfstool tools/pfstool.cpp)
+add_executable(asttool tools/asttool.cpp)
+target_link_libraries(asttool PRIVATE artemis)
 target_link_libraries(pfstool PRIVATE artemis)
