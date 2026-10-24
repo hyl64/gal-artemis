@@ -157,12 +157,20 @@ agame: 4 frame(s)
 ```
 产物：`screenshots/first-screen.png`（1280×720，日文台词正确）。
 
-**踩到的坑（都是渲染层的经典错）**：
-1. **CoreText 不认上下文的填充色**：`CTLineDraw` 用属性字典里的
-   `kCTForegroundColorAttributeName`，不设就是**黑字**（深色框上等于看不见）。
-   第一版量到「有 458 个不透明像素」却「0 个亮像素」，就是黑字。
-2. **CGBitmapContext 的字节序要显式**：用 `kCGImageAlphaPremultipliedLast` 并按字节
-   RGBA 读，不猜 `uint32` 的字节顺序（猜错一次，alpha 和 R 通道互换）。
+**踩到的坑（CoreText 的「一切来自属性字典」）**：
+
+`CTLineDraw` **完全不看上下文状态**，颜色、字体、字号全在属性字典里：
+1. 不设 `kCTForegroundColorAttributeName` → **黑字**（深色框上等于看不见）。
+   第一版量到「458 个不透明像素」却「0 个亮像素」。
+2. 不设 `kCTFontAttributeName` → 用**默认 12pt**，不是 `CTFontCreateWithName` 建的那个。
+   表现是「字体名和字号都报 42pt，但行宽只有 92px」——7 个汉字应该是 294px。
+   加上字体属性后：`chars=7 width=294.0 ascent=37.0` ✓
+
+3. **CGBitmapContext 的字节序要显式**：用 `kCGImageAlphaPremultipliedLast` 并按字节
+   RGBA 读，不猜 `uint32` 的顺序（猜错一次，alpha 和 R 通道互换）。
+
+这三条的共同点：**CoreText 是声明式的，不是状态式的**——你在上下文里设的任何东西
+都可能被忽略。
 
 ## 下一步
 

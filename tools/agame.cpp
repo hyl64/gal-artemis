@@ -74,7 +74,21 @@ static bool InitFont(float size)
 static LineBitmap RenderLine(const std::string& text, float size)
 {
 	LineBitmap out;
-	if(gFont == nullptr && !InitFont(size))
+	if(gFont == nullptr)
+	{
+		InitFont(size);
+		if(getenv("AGAME_DEBUG") != nullptr)
+		{
+			CFStringRef ps = CTFontCopyPostScriptName(gFont);
+			char name[128] = { 0 };
+			CFStringGetCString(ps, name, sizeof name, kCFStringEncodingUTF8);
+			CFRelease(ps);
+			fprintf(stderr, "[font] %s at %.1fpt (asked %.1f)\n", name, CTFontGetSize(gFont),
+				(double)size);
+			fflush(stderr);
+		}
+	}
+	if(gFont == nullptr)
 		return out;
 
 	CFStringRef cftext = CFStringCreateWithCString(kCFAllocatorDefault, text.c_str(), kCFStringEncodingUTF8);
@@ -87,14 +101,23 @@ static LineBitmap RenderLine(const std::string& text, float size)
 	const CGFloat white[] = { 1.0, 1.0, 1.0, 1.0 };
 	CGColorRef whiteColour = CGColorCreate(rgb, white);
 	CGColorSpaceRelease(rgb);
-	const void* keys[] = { kCTForegroundColorAttributeName };
-	const void* values[] = { whiteColour };
-	CFDictionaryRef attributes = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 1,
+	// CoreText takes everything from the attributes: the colour *and* the font.
+	// Without the font attribute it falls back to a 12pt default, which is why the
+	// first version drew the right characters at the wrong size.
+	const void* keys[] = { kCTForegroundColorAttributeName, kCTFontAttributeName };
+	const void* values[] = { whiteColour, gFont };
+	CFDictionaryRef attributes = CFDictionaryCreate(kCFAllocatorDefault, keys, values, 2,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 	CFAttributedStringRef attr = CFAttributedStringCreate(kCFAllocatorDefault, cftext, attributes);
 	CTLineRef line = CTLineCreateWithAttributedString(attr);
 	CGFloat ascent = 0, descent = 0, leading = 0;
 	const double width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
+	if(getenv("AGAME_DEBUG") != nullptr)
+	{
+		fprintf(stderr, "[line] chars=%ld width=%.1f ascent=%.1f descent=%.1f leading=%.1f\n",
+			(long)CFStringGetLength(cftext), width, (double)ascent, (double)descent, (double)leading);
+		fflush(stderr);
+	}
 
 	const int w = (int)width + 8;
 	const int h = (int)(ascent + descent + leading) + 8;
