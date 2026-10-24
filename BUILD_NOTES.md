@@ -210,5 +210,40 @@ frame 2: はじまりの朝。
 **坑**：第一版按**字节**切片，把 UTF-8 汉字切成半个 → 乱码。
 改成按字符边界切（`FirstChars` 会跳过续字节）。
 
-**还缺**：`.iet` 图像解码（需要真实游戏文件做特征分析）、角色立绘与背景切换、
-存档、音频。
+## 已完成：真实游戏的文件布局 + 分卷归档（第七层能力）
+
+**没有 Artemis 游戏数据**，但公开的逆向分析文章记录了真实发行版的布局
+（[GalgeLabo 的 [RE] 文章](https://galgelabo.fc2.page/amakano-3-re)，引擎标注为 Artemis）：
+
+```
+<Game>.exe
+<Game>.pfs.000   角色语音
+<Game>.pfs.001   角色立绘
+<Game>.pfs.002   背景、事件CG、立绘
+<Game>.pfs.003   事件CG
+```
+
+**关键**：`.pfs.NNN` 每个都是**独立的归档**（不是分片），`pfsgame` 现在能按后缀顺序
+遍历整个游戏目录：
+
+```bash
+$ ./build/pfsgame /tmp/game
+Demo: 2 archive(s)
+  Demo.pfs.001
+  Demo.pfs.002
+2 entries
+          29  Demo.pfs.001:root/a.txt
+        2000  Demo.pfs.002:root/b.bin
+```
+
+**另一个重要发现**：游戏内部的资源路径是
+
+```
+root\image\ev\ev_<尺寸><组>_<Zoning>_<ID>_<差分>.<ext>
+root\image\fg\<角色>_<ID>.psb      ← 立绘是 Emote 的 PSB 格式，不是位图！
+```
+
+`.psb`（Emote 的 tag 式场景格式）和 `.iet`（静图）**都不是能直接解码的位图**。
+`.iet` 没有公开文档，只能靠真实文件的字节反推。
+
+**还缺**：`.iet` 解码、`.psb` 立绘、存档、音频。
