@@ -20,5 +20,6 @@ target_link_libraries(artemis PUBLIC "-framework CoreFoundation")
 
 add_executable(pfstool tools/pfstool.cpp)
 add_executable(asttool tools/asttool.cpp)
+target_link_libraries(asttool PRIVATE iconv)
 target_link_libraries(asttool PRIVATE artemis)
 target_link_libraries(pfstool PRIVATE artemis)

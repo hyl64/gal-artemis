@@ -13,6 +13,30 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <iconv.h>
+
+// Artemis scripts are Shift-JIS in the older titles and UTF-8 in the newer ones;
+// a line read as bytes has to be converted before it can be printed
+static std::string ToUtf8(const std::string& in, bool fromSjis)
+{
+	if(!fromSjis)
+		return in;
+	iconv_t cd = iconv_open("UTF-8", "SHIFT_JIS");
+	if(cd == (iconv_t)-1)
+		return in;
+	std::string out(in.size() * 3 + 4, '\0');
+	char* src = const_cast<char*>(in.data());
+	size_t srcLen = in.size();
+	char* dst = &out[0];
+	size_t dstLen = out.size();
+	const size_t r = iconv(cd, &src, &srcLen, &dst, &dstLen);
+	iconv_close(cd);
+	if(r == (size_t)-1)
+		return in;
+	out.resize(out.size() - dstLen);
+	return out;
+}
 
 static std::string ReadFile(const char* path)
 {
@@ -101,6 +125,59 @@ static int RoundTrip(const std::string& text, bool verbose)
 	}
 }
 
+
+// the game's lines, in the order a scenario would show them: every string that is
+// not a key, plus the tags that mark pauses in them
+static void CollectText(const artemis::Node& node, std::vector<std::string>& out)
+{
+	using artemis::NodeType;
+	switch(node.type)
+	{
+	case NodeType::String:
+		out.push_back(node.text);
+		break;
+	case NodeType::Tag:
+		out.push_back(node.hasTagNumber ? ("[" + node.text + "]") : "[]");
+		break;
+	case NodeType::Array:
+		for(auto& item : node.items)
+			CollectText(item, out);
+		break;
+	case NodeType::Dictionary:
+		// a member's key is not text; its value is - but `name` and the version
+		// fields are bookkeeping, not something a player reads
+		for(auto& m : node.members)
+			if(m.first != "name" && m.first != "astver" && m.first != "version")
+				CollectText(m.second, out);
+		break;
+	default:
+		break;
+	}
+}
+
+static int Text(const std::string& path, bool fromSjis)
+{
+	try
+	{
+		artemis::Script script = artemis::Parse(ReadFile(path.c_str()));
+		std::vector<std::string> lines;
+		// the lines live under `text`; a script without one (a system file) has
+		// nothing to show
+		for(auto& m : script.top)
+			if(m.first == "text")
+				CollectText(m.second, lines);
+		printf("%s: %d line(s)\n", path.c_str(), (int)lines.size());
+		for(auto& l : lines)
+			printf("  | %s\n", ToUtf8(l, fromSjis).c_str());
+		return 0;
+	}
+	catch(const std::exception& e)
+	{
+		fprintf(stderr, "asttool: %s\n", e.what());
+		return 1;
+	}
+}
+
 static int SelfTest()
 {
 	// what a scenario looks like: a version, a nested text block with a label, a
@@ -136,8 +213,9 @@ int main(int argc, char** argv)
 {
 	if(argc < 2)
 	{
-		fprintf(stderr, "usage: %s dump <script.ast>\n       %s roundtrip <script.ast>\n"
-			"       %s selftest\n", argv[0], argv[0], argv[0]);
+		fprintf(stderr, "usage: %s dump <script.ast>\n       %s text <script.ast> [--sjis]\n"
+			"       %s roundtrip <script.ast>\n       %s selftest\n",
+			argv[0], argv[0], argv[0], argv[0]);
 		return 2;
 	}
 	const std::string cmd(argv[1]);
@@ -153,6 +231,11 @@ int main(int argc, char** argv)
 	{
 		fprintf(stderr, "asttool: cannot read %s\n", argv[2]);
 		return 1;
+	}
+	if(cmd == "text")
+	{
+		const bool sjis = argc >= 4 && std::string(argv[3]) == "--sjis";
+		return Text(argv[2], sjis);
 	}
 	if(cmd == "dump")
 		return RoundTrip(text, true);

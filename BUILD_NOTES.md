@@ -85,6 +85,28 @@ text = {
 **踩过的坑**：块里的键可以是**带引号的字符串**（`"start" = {`），我第一版只认裸标识符
 作键，直接报错；块是字典还是列表要**逐条判断**，因为同一个文件里两种写法混用。
 
+## 已完成：剧本台词抽取（第三层能力）
+
+`asttool text <script> [--sjis]`：按顺序抽出剧本里玩家会看到的台词（跳过 `name`/`astver`
+这类簿记字段，保留 `[123]` 动作标记），并支持 **Shift-JIS → UTF-8** 转换
+（老作品是 SJIS，新作品是 UTF-8）。
+
+```bash
+$ ./build/asttool text /tmp/sample.ast
+/tmp/sample.ast: 3 line(s)
+  | 俺たちの新しい日常が、ここから始まる。
+  | [12]
+  | 二行目
+
+$ ./build/asttool text /tmp/sample_sjis.ast --sjis     # 同一个剧本的 SJIS 版本
+/tmp/sample_sjis.ast: 3 line(s)
+  | 俺たちの新しい日常が、ここから始まる。
+  | [12]
+  | 二行目
+```
+
+这就是「把剧本读成台词」的能力——不需要游戏数据也能验证（`selftest` 与 `--sjis` 都有自证）。
+
 ## 下一步
 
 1. 弄清 `.ast` 里各个键的**语义**（哪些是场景名、哪些是台词、tag 如何驱动文本）
