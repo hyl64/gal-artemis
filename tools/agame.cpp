@@ -23,6 +23,24 @@
 #include <string>
 #include <vector>
 
+// cut a UTF-8 string after `count` characters, never inside one
+static std::string FirstChars(const std::string& s, size_t count)
+{
+	size_t at = 0, seen = 0;
+	while(at < s.size() && seen < count)
+	{
+		const unsigned char c = (unsigned char)s[at];
+		size_t len = 1;
+		if((c & 0x80) == 0) len = 1;
+		else if((c & 0xE0) == 0xC0) len = 2;
+		else if((c & 0xF0) == 0xE0) len = 3;
+		else if((c & 0xF8) == 0xF0) len = 4;
+		at += len;
+		seen++;
+	}
+	return s.substr(0, at);
+}
+
 static std::string ReadFile(const char* path)
 {
 	FILE* f = fopen(path, "rb");
@@ -320,11 +338,36 @@ int main(int argc, char** argv)
 			continue;
 		}
 
+		// reveal the line a character at a time: the frame drawn is the part of it
+		// that has been "typed" so far
+		static std::string shown;
+		shown.clear();
+
 		// draw the frame
 		screen.Background();
 		screen.Box(60, screen.height - 260, screen.width - 120, 200, 0xb0101418u);
 		if(haveLine)
 		{
+			if(headless)
+			{
+				// a few points of the reveal, so the effect shows up in the frames
+				static const int stages[] = {1, 3, 1000000};
+				for(int stage : stages)
+				{
+					const std::string partialText = stage >= 1000 ? line : FirstChars(line, (size_t)stage);
+					LineBitmap partial = RenderLine(partialText, 42.0f);
+					screen.Background();
+					screen.Box(60, screen.height - 260, screen.width - 120, 200, 0xb0101418u);
+					screen.Blit(partial, 96, screen.height - 220);
+					screen.Present();
+					char path[512];
+					snprintf(path, sizeof path, "%s/frame%03d.bmp", framesDir.c_str(), frame);
+					screen.Save(path);
+					printf("frame %d: %s\n", frame, partialText.c_str());
+					frame++;
+				}
+				continue;
+			}
 			LineBitmap rendered = RenderLine(line, 42.0f);
 			if(getenv("AGAME_DEBUG") != nullptr)
 			{
