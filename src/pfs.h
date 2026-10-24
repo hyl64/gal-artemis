@@ -61,3 +61,22 @@ namespace artemis
 }
 
 #endif // ARTEMIS_PFS_H
+
+// ---------------------------------------------------------------------------
+// the split spelling
+// ---------------------------------------------------------------------------
+//
+// A shipped title keeps its data in several archives named "<game>.pfs.<NNN>",
+// each an archive of its own (see docs/GAME_LAYOUT.md).  These list what a game
+// has and read any one of them, so a caller can work from the game folder rather
+// than from a file name it has to know in advance.
+
+namespace artemis
+{
+	// the archive files in `directory` whose name starts with `stem` (for example
+	// "Amakano3"), in suffix order; empty when there are none
+	std::vector<std::string> FindArchives(const std::string& directory, const std::string& stem);
+
+	// the concatenated entries of every archive found, each archive read on its own
+	std::vector<Entry> ListAll(const std::vector<std::string>& paths);
+}

@@ -3,6 +3,9 @@
 #include "pfs.h"
 
 #include <cstring>
+#include <algorithm>
+
+#include <dirent.h>
 #include <stdexcept>
 
 #include <CommonCrypto/CommonDigest.h>
@@ -150,5 +153,66 @@ namespace artemis
 			out.insert(out.end(), content.begin(), content.end());
 		}
 		return out;
+	}
+}
+
+namespace artemis
+{
+	std::vector<std::string> FindArchives(const std::string& directory, const std::string& stem)
+	{
+		std::vector<std::string> out;
+		DIR* d = opendir(directory.c_str());
+		if(d == nullptr)
+			return out;
+		// an empty stem means "whatever .pfs archives are here"
+		const std::string marker = ".pfs";
+		const std::string prefix = stem.empty() ? marker : stem + marker;
+		struct dirent* e;
+		while((e = readdir(d)) != nullptr)
+		{
+			const std::string name = e->d_name;
+			// "<stem>.pfs" and "<stem>.pfs.001" both belong to the game
+			const bool matches = stem.empty()
+				? name.find(marker) != std::string::npos
+				: name.compare(0, prefix.size(), prefix) == 0;
+			if(matches)
+				out.push_back(directory + "/" + name);
+		}
+		closedir(d);
+		std::sort(out.begin(), out.end());
+		return out;
+	}
+
+	std::vector<Entry> ListAll(const std::vector<std::string>& paths)
+	{
+		std::vector<Entry> all;
+		for(const std::string& path : paths)
+		{
+			FILE* f = fopen(path.c_str(), "rb");
+			if(f == nullptr)
+				continue;
+			fseek(f, 0, SEEK_END);
+			const long size = ftell(f);
+			fseek(f, 0, SEEK_SET);
+			std::vector<uint8_t> data((size_t)(size > 0 ? size : 0));
+			if(size > 0)
+				data.resize(fread(data.data(), 1, data.size(), f));
+			fclose(f);
+			try
+			{
+				Archive archive = Read(data);
+				for(Entry e : archive.entries)
+				{
+					// say which archive an entry came from
+					e.name = path.substr(path.find_last_of('/') + 1) + ":" + e.name;
+					all.push_back(e);
+				}
+			}
+			catch(const std::exception&)
+			{
+				// a file that is not an archive is skipped, not fatal
+			}
+		}
+		return all;
 	}
 }

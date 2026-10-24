@@ -23,6 +23,9 @@ add_executable(asttool tools/asttool.cpp)
 target_link_libraries(asttool PRIVATE iconv)
 target_link_libraries(asttool PRIVATE artemis iconv)
 
+add_executable(pfsgame tools/pfsgame.cpp)
+target_link_libraries(pfsgame PRIVATE artemis)
+
 add_executable(arun tools/arun.cpp)
 target_link_libraries(arun PRIVATE artemis)
 
