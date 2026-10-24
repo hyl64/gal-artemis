@@ -180,3 +180,20 @@ agame: 4 frame(s)
 2. `.iet` 图像格式
 3. 运行时骨架：脚本 VM + 画面层
 4. 需要真实 Artemis 游戏数据才能验收
+
+---
+
+## 引擎⑤ 总览（第 50 轮）
+
+| 层 | 文件 | 工具 | 自证 |
+|---|---|---|---|
+| `.pfs` 归档（PF6/PF8 + XOR 加密） | `src/pfs.*` | `pfstool` | `selftest` |
+| `.ast` 文本剧本（解析 + 回写） | `src/ast.*` | `asttool` | `selftest` |
+| 台词抽取 + Shift-JIS | — | `asttool text --sjis` | 两种编码同结果 |
+| 剧本执行核心（动作流） | `src/runtime.*` | `arun` | `--selftest` |
+| 第一屏（SDL + CoreText） | `tools/agame.cpp` | `agame` | `--frames` 逐行出图 |
+
+**1829 行自写代码 / 4 个工具 / 5 套自证 / 2 篇格式文档 / 1 张截图。**
+
+**还缺**：`.iet` 图像解码（需要真实游戏文件做特征分析）、角色立绘与背景切换、
+存档、音频。
