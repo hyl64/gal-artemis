@@ -25,4 +25,13 @@ target_link_libraries(asttool PRIVATE artemis iconv)
 
 add_executable(arun tools/arun.cpp)
 target_link_libraries(arun PRIVATE artemis)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SDL2 REQUIRED sdl2)
+add_executable(agame tools/agame.cpp)
+target_link_libraries(agame PRIVATE artemis ${SDL2_LIBRARIES}
+	"-framework CoreText" "-framework CoreGraphics" "-framework CoreFoundation")
+target_include_directories(agame PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_directories(agame PRIVATE ${SDL2_LIBRARY_DIRS})
+target_link_libraries(arun PRIVATE artemis)
 target_link_libraries(pfstool PRIVATE artemis)

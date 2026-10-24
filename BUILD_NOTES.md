@@ -142,6 +142,28 @@ lines=4 pauses=2 waited=920 jumps=1 unknown=0 -> all passed
 **踩到的坑**：解析出的剧本是构造函数的局部对象，而运行时把 `&m.second` 存了下来——
 **悬垂指针**，第二个场景读到垃圾。改成按值持有节点后正常。
 
+## 已完成：第一屏（第五层，能玩了）
+
+`tools/agame.cpp`：SDL2 窗口 + CoreText 渲日文，把运行时动作流画出来——夜色渐变背景、
+对话框、当前台词；空格/点击推进，`--frames <dir>` 无头模式每行写一张图。
+
+```bash
+$ SDL_VIDEODRIVER=dummy ./build/agame tests/sample-scene.ast --frames /tmp/frames
+frame 0: はじまりの朝。
+frame 1: 窓の外は、まだ青い。
+frame 2: そして物語は続く。
+frame 3: 終わり。
+agame: 4 frame(s)
+```
+产物：`screenshots/first-screen.png`（1280×720，日文台词正确）。
+
+**踩到的坑（都是渲染层的经典错）**：
+1. **CoreText 不认上下文的填充色**：`CTLineDraw` 用属性字典里的
+   `kCTForegroundColorAttributeName`，不设就是**黑字**（深色框上等于看不见）。
+   第一版量到「有 458 个不透明像素」却「0 个亮像素」，就是黑字。
+2. **CGBitmapContext 的字节序要显式**：用 `kCGImageAlphaPremultipliedLast` 并按字节
+   RGBA 读，不猜 `uint32` 的字节顺序（猜错一次，alpha 和 R 通道互换）。
+
 ## 下一步
 
 1. 弄清 `.ast` 里各个键的**语义**（哪些是场景名、哪些是台词、tag 如何驱动文本）
