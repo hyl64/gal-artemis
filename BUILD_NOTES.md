@@ -107,6 +107,41 @@ $ ./build/asttool text /tmp/sample_sjis.ast --sjis     # 同一个剧本的 SJIS
 
 这就是「把剧本读成台词」的能力——不需要游戏数据也能验证（`selftest` 与 `--sjis` 都有自证）。
 
+## 已完成：剧本执行核心（第四层，运行时的脑子）
+
+`src/runtime.{h,cpp}` + `tools/arun.cpp`：把 `.ast` 走成**动作流**——这是引擎里与平台
+无关的部分，也是从零重写最该先写的「脑子」。
+
+支持的动作：
+| 动作 | 来源 |
+|---|---|
+| `line` | 剧本里的字符串（玩家读到的一行） |
+| `wait` | `[800]` 这样的标记（停顿毫秒） |
+| `jump` | `goto = "scene"`（跨场景跳转） |
+| `unknown` | 认不出的键，**如实报告而不静默忽略** |
+
+```bash
+$ ./build/arun /tmp/scene.ast
+scenes: start next
+line    はじまりの朝。   (scene start)
+wait    800 ms   (scene start)
+line    窓の外は、まだ青い。   (scene start)
+jump    next   (scene next)
+line    そして物語は続く。   (scene next)
+wait    120 ms   (scene next)
+line    終わり。   (scene next)
+4 line(s), 2 pause(s) totalling 920 ms, 1 jump(s), 0 unknown
+
+$ ./build/arun --selftest
+lines=4 pauses=2 waited=920 jumps=1 unknown=0 -> all passed
+```
+
+**自证**：内置一个「两场景 + 停顿 + 跳转」的剧本，断言 4 行 / 2 停顿 / 共 920ms / 1 跳转，
+不需要游戏数据。
+
+**踩到的坑**：解析出的剧本是构造函数的局部对象，而运行时把 `&m.second` 存了下来——
+**悬垂指针**，第二个场景读到垃圾。改成按值持有节点后正常。
+
 ## 下一步
 
 1. 弄清 `.ast` 里各个键的**语义**（哪些是场景名、哪些是台词、tag 如何驱动文本）
