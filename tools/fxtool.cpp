@@ -448,7 +448,7 @@ namespace
 		int labelsOther = 0;
 		int colortone = 0, colortoneReset = 0, colortoneSepia = 0, colortoneUnknown = 0;
 		int fgSepia = 0;
-		int extrans = 0, extransNoTime = 0;
+		int extrans = 0, extransNoTime = 0, extransSync0 = 0;
 		int excall = 0, excallWithLabel = 0;
 		int movie = 0, movieCancel = 0, movieBlackBg = 0;
 		int titleTag = 0, autoplay = 0, autoplayStop = 0, skipstop = 0;
@@ -463,6 +463,7 @@ namespace
 		std::map<std::string, int> exfontColours;
 		std::vector<fx::MovieTag> movies;
 		std::vector<int64_t> extransTimes;
+		std::map<int64_t, int> extransTimeCounts;
 	};
 
 	bool ScanAstCorpus(const std::string& directory, AstCorpusStats& out,
@@ -512,7 +513,10 @@ namespace
 					out.extrans++;
 					if(!tag.hasTime)
 						out.extransNoTime++;
+					if(tag.hasSync && tag.sync == 0)
+						out.extransSync0++;
 					out.extransTimes.push_back(tag.timeMs);
+					out.extransTimeCounts[tag.timeMs]++;
 				}
 			}
 			else if(name == "excall")
@@ -1298,7 +1302,7 @@ namespace
 			std::vector<uint8_t> stage(pixels * 4, 128);
 			for(size_t at = 3; at < stage.size(); at += 4)
 				stage[at] = 255;
-			const int frames = options.count > 0 ? options.count : 50;
+			const int frames = options.count > 1 ? options.count : 50;
 			const auto start = std::chrono::steady_clock::now();
 			for(int i = 0; i < frames; i++)
 				fx::ApplyColorTone(stage.data(), pixels, style);
@@ -1451,9 +1455,13 @@ namespace
 			stats.files, stats.parseFailures);
 		printf("  colortone %d (reset %d, sepia %d), fg style=sepia %d\n",
 			stats.colortone, stats.colortoneReset, stats.colortoneSepia, stats.fgSepia);
-		printf("  extrans %d (no time %d), excall %d (%zu unique targets, label= %d)\n",
-			stats.extrans, stats.extransNoTime, stats.excall, stats.excallTargets.size(),
-			stats.excallWithLabel);
+		printf("  extrans %d (no time %d, sync=0 %d), excall %d (%zu unique targets, "
+			"label= %d)\n", stats.extrans, stats.extransNoTime, stats.extransSync0,
+			stats.excall, stats.excallTargets.size(), stats.excallWithLabel);
+		printf("  extrans times:");
+		for(const auto& entry : stats.extransTimeCounts)
+			printf(" %lldms x%d,", (long long)entry.first, entry.second);
+		printf("\n");
 		printf("  movie %d (cancel %d, bg=black %d):", stats.movie, stats.movieCancel,
 			stats.movieBlackBg);
 		for(const fx::MovieTag& tag : stats.movies)
@@ -1473,8 +1481,8 @@ namespace
 		fx::SaveTitleBook book;
 		for(const std::string& title : stats.savetitleAll)
 			book.Set(title);
-		printf("  save titles: %zu sets, %zu distinct, current \"%s\"\n", book.Sets(),
-			book.UniqueTitles(), book.Current().c_str());
+		printf("  save titles: %zu sets, %zu distinct, current %zu byte(s)\n", book.Sets(),
+			book.UniqueTitles(), book.Current().size());
 		fx::TextureCache cache;
 		cache.Insert("bg", 4u << 20);
 		cache.Insert("fg", 3u << 20);
@@ -2444,6 +2452,9 @@ namespace
 		}
 		CheckEq("extrans-real-longest", longest, 1000);
 		CheckEq("extrans-real-zero-times", zeroes, 2); // bare tag + time=0
+		CheckEq("extrans-real-sync0", ast->extransSync0, 11);
+		CheckEq("extrans-real-time-500", ast->extransTimeCounts.at(500), 13);
+		CheckEq("extrans-real-time-1000", ast->extransTimeCounts.at(1000), 10);
 	}
 
 	void TestExcall(const Corpus& corpus, const AstCorpusStats* ast)

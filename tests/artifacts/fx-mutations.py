@@ -74,6 +74,50 @@ MUTATIONS = [
         "		if(budget >= 0 && cycle >= budget)",
         "		if(false) // MUTATION: ignore loop/max",
         ["ipt-stops-after-max"],
+    ),    (
+        "colortone: drop the 0..255 clamp",
+        "src/fx/colortone.cpp",
+        """		int ClampByte(int64_t value)
+		{
+			if(value < 0)
+				return 0;
+			if(value > 255)
+				return 255;
+			return (int)value;
+		}""",
+        """		int ClampByte(int64_t value)
+		{
+			return (int)(uint8_t)value; // MUTATION: wrap instead of clamp
+		}""",
+        ["colortone-clamp-high", "colortone-clamp-low", "colortone-frame-pixels"],
+    ),
+    (
+        "extrans: drop the half-step rounding",
+        "src/fx/extrans.cpp",
+        "const int64_t sum = (int64_t)a * (timeMs - tMs) + (int64_t)b * tMs + timeMs / 2;",
+        "const int64_t sum = (int64_t)a * (timeMs - tMs) + (int64_t)b * tMs; // MUTATION",
+        ["extrans-mid-0-255", "extrans-tmid-is-half"],
+    ),
+    (
+        "excall: ignore an explicit return",
+        "src/fx/excall.cpp",
+        'else if(command.name == "return" || command.name == "excallend")',
+        "else if(false) // MUTATION: no return command",
+        ["excall-synthetic-return-command", "excall-return-to-caller"],
+    ),
+    (
+        "savetitle: cut UTF-8 by bytes instead of code points",
+        "src/fx/tags.cpp",
+        """	std::string TruncateUtf8(const std::string& text, size_t maxBytes)
+	{
+		if(text.size() <= maxBytes)
+			return text;""",
+        """	std::string TruncateUtf8(const std::string& text, size_t maxBytes)
+	{
+		return text.substr(0, maxBytes); // MUTATION: byte cut
+		if(text.size() <= maxBytes)
+			return text;""",
+        ["utf8-truncate-4", "utf8-truncate-stays-valid"],
     ),
 ]
 

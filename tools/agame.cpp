@@ -819,7 +819,6 @@ namespace
 
 		const std::vector<AudioTrackReport>& tracks() const { return m_tracks; }
 		const std::vector<std::string>& notes() const { return m_notes; }
-		const std::vector<std::string>& pageLog() const { return m_pageLog; }
 		bool captured() const { return m_captured; }
 		double capturedSeconds() const { return m_capturedSeconds; }
 		double capturedRms() const { return m_capturedRms; }
@@ -1958,6 +1957,7 @@ namespace
 		size_t choiceTotal = 0;
 		int chosen = -1;
 		std::vector<std::string> notes;
+		std::vector<std::string> pageLog;
 		std::vector<std::string> audioLines;
 		double audioRms = 0;
 		double audioPeak = 0;
@@ -2052,6 +2052,7 @@ namespace
 		const std::string& bootSummary() const { return m_vm->bootSummary(); }
 		const std::string& menuTarget() const { return m_menuTarget; }
 		const std::vector<std::string>& notes() const { return m_notes; }
+		const std::vector<std::string>& pageLog() const { return m_pageLog; }
 		const std::vector<std::string>& audioLines() const { return m_audioLines; }
 		int msgspeed() const { return m_msgspeed; }
 		size_t choiceTotal() const { return m_choiceTotal; }
@@ -4808,6 +4809,256 @@ namespace
 		}
 		else
 			Skip(tally, "audio-capture", "no corpus");
+
+		// 12. the interactive window: the release's own boot -> title -> story flow,
+		// driven by scripted input.  `SDL_VIDEODRIVER=dummy` + the virtual clock make
+		// this deterministic and fast; the same code path opens a real window.
+		{
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.script = "scenario/scene.iet";
+			play.maxPages = 0;
+			play.quitAfterPages = 1;
+			play.autoplayKeys.push_back("space");
+			play.shotTitle = "/tmp/agame-selftest-title.png";
+			play.shotScene = "/tmp/agame-selftest-scene.png";
+			const PlayRun run = RunInteractive(play);
+			const bool ok = run.ok && run.stats.idleSeen && run.regions >= 4 &&
+				run.pages >= 1 && FileExists(play.shotTitle) && FileExists(play.shotScene) &&
+				!run.stats.audioDeviceInfo.empty();
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"boot -> %s (idle, %zu buttons) -> click start -> %d page(s); shots title=%d "
+				"scene=%d; audio device=%s", run.menuTarget.c_str(), run.regions, run.pages,
+				(int)FileExists(play.shotTitle), (int)FileExists(play.shotScene),
+				run.stats.audioDeviceInfo.empty() ? "(offline)" : "open");
+			if(ok)
+				Pass(tally, "play-title-flow", detail);
+			else
+				Fail(tally, "play-title-flow",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+
+		// 13. a click while the page is still typing completes the page, it does not
+		// skip it: one click, one page, and the reveal finished on that click
+		{
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.script = "scenario/scene.iet";
+			play.maxPages = 0;
+			play.startAtMenu = false;
+			play.autoplayKeys.push_back("space"); // at the title: no
+			// the title needs a click first when the menu is asked for; here the run
+			// starts in the story, so the first click lands on a page mid-reveal
+			play.autoplayKeys.clear();
+			play.autoplayKeys.push_back("space");
+			play.quitAfterPages = 1;
+			const PlayRun run = RunInteractive(play);
+			const bool ok = run.ok && run.pages == 1 && run.stats.completedReveals == 1 &&
+				run.stats.advances == 0 && run.stats.frames >= 1;
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"one click mid-reveal: pages=%d completed=%d advances=%d frames=%d",
+				run.pages, run.stats.completedReveals, run.stats.advances, run.stats.frames);
+			if(ok)
+				Pass(tally, "play-click-completes", detail);
+			else
+				Fail(tally, "play-click-completes",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+
+		// 14. five pages by clicks, and the same run twice is the same pixels: a
+		// frame-hash chain is a harder regression check than a screenshot
+		{
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.script = "scenario/scene.iet";
+			play.maxPages = 0;
+			play.startAtMenu = false;
+			play.hashFrames = true;
+			play.quitAfterPages = 5;
+			for(int i = 0; i < 5; i++)
+			{
+				play.autoplayKeys.push_back("wait:2000");
+				play.autoplayKeys.push_back("space");
+			}
+			const PlayRun first = RunInteractive(play);
+			const PlayRun second = RunInteractive(play);
+			const bool same = first.stats.frameHashes == second.stats.frameHashes &&
+				!first.stats.frameHashes.empty();
+			const bool ok = first.ok && first.pages >= 5 && first.stats.advances >= 4 && same &&
+				first.stats.frameHashes.size() == second.stats.frameHashes.size();
+			uint64_t fold = 0;
+			for(uint64_t hash : first.stats.frameHashes)
+				fold = fold * 1099511628211ull + hash;
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"pages=%d advances=%d frames=%zu hashes equal=%d chain=%016llx",
+				first.pages, first.stats.advances, first.stats.frameHashes.size(), (int)same,
+				(unsigned long long)fold);
+			if(ok)
+				Pass(tally, "play-advance-5-deterministic", detail);
+			else
+				Fail(tally, "play-advance-5-deterministic",
+					std::string(detail) + (first.error.empty() ? "" : (" | " + first.error)));
+		}
+
+		// 15. a choice end to end.  The all-ages scene has no choice point and the
+		// engine's own choice UI is Lua, so the fixture below is written for this
+		// test and kept out of the corpus: three options, pick the second, and the
+		// page that appears must be the second road's.
+		{
+			const std::string dir = "/tmp/agame-fixture";
+			mkdir(dir.c_str(), 0755);
+			const std::string path = dir + "/choice_fixture.iet";
+			FILE* file = fopen(path.c_str(), "wb");
+			bool written = false;
+			if(file != nullptr)
+			{
+				const char* text =
+					"*start\n"
+					"[select file=\"choice_fixture.iet\" pre=\"route\"]\n"
+					"\n"
+					"*route_1\n"
+					"一つ目の道を選んだ。\n"
+					"[rp]\n"
+					"[jump label=\"done\"]\n"
+					"\n"
+					"*route_2\n"
+					"二つ目の道を選んだ。\n"
+					"[rp]\n"
+					"[jump label=\"done\"]\n"
+					"\n"
+					"*route_3\n"
+					"三つ目の道を選んだ。\n"
+					"[rp]\n"
+					"[jump label=\"done\"]\n"
+					"\n"
+					"*done\n"
+					"[stop]\n";
+				written = fwrite(text, 1, strlen(text), file) == strlen(text);
+				fclose(file);
+			}
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.extraDir = dir;
+			play.script = "choice_fixture.iet";
+			play.startAtMenu = false;
+			play.maxPages = 0;
+			play.quitAfterPages = 1;
+			play.autoplayKeys.push_back("choice:2");
+			play.autoplayKeys.push_back("space");
+			const PlayRun run = RunInteractive(play);
+			bool right = false;
+			for(const std::string& page : run.pageLog)
+				if(page.find("二つ目の道") != std::string::npos)
+					right = true;
+			const bool ok = written && run.ok && run.choiceTotal == 3 && run.chosen == 2 &&
+				right && run.pages >= 1;
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"fixture %s: options=%zu chosen=%d page=\"%s\" pages=%d", written ? "ok" : "NOT "
+				"WRITTEN", run.choiceTotal, run.chosen,
+				run.pageLog.empty() ? "(none)" : run.pageLog.front().c_str(), run.pages);
+			if(ok)
+				Pass(tally, "play-choice-endtoend", detail);
+			else
+				Fail(tally, "play-choice-endtoend",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+
+		// 15b. sound overlap: the mixer's stream count is the proof.  The all-ages
+		// release ships no voice files, so this fixture uses what it has - a BGM and
+		// two sound effects started together - and asks the mixer how many streams it
+		// was actually running.  (The voice channel is the same code path with a
+		// different group; this corpus has nothing to put in it.)
+		{
+			const std::string dir = "/tmp/agame-fixture";
+			mkdir(dir.c_str(), 0755);
+			const std::string path = dir + "/audio_fixture.iet";
+			FILE* file = fopen(path.c_str(), "wb");
+			bool written = false;
+			if(file != nullptr)
+			{
+				const char* text =
+					"*start\n"
+					"[bgm file=\"kujira\"]\n"
+					"[seplay file=\"se/kisya\"]\n"
+					"[seplay file=\"se/para\"]\n"
+					"三つの音が同時に鳴っている。\n"
+					"[rp]\n"
+					"[stop]\n";
+				written = fwrite(text, 1, strlen(text), file) == strlen(text);
+				fclose(file);
+			}
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.extraDir = dir;
+			play.script = "audio_fixture.iet";
+			play.startAtMenu = false;
+			play.maxPages = 0;
+			play.quitAfterPages = 1;
+			play.autoplayKeys.push_back("wait:600");
+			play.autoplayKeys.push_back("space");
+			const PlayRun run = RunInteractive(play);
+			const bool ok = written && run.ok && run.audioTracks >= 3 && run.streamsMax >= 3 &&
+				run.engineFrames > 0;
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"bgm + 2 se: tracks=%zu streams max=%d avg=%.2f frames=%lld bgm=\"%s\"",
+				run.audioTracks, run.streamsMax, run.streamsAvg,
+				(long long)run.engineFrames, run.currentBgm.c_str());
+			if(ok)
+				Pass(tally, "play-sound-overlap", detail);
+			else
+				Fail(tally, "play-sound-overlap",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+
+		// 16. sound: a real device when there is one, and a stated reason when there
+		// is not.  The mixer's own counters are the evidence - tracks resolved, the
+		// BGM that is playing, and how many streams overlapped.
+		if(!data.empty() && FileExists(scenePath) && DirExists(extracted))
+		{
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.script = "scenario/scene.iet";
+			play.maxPages = 0;
+			play.startAtMenu = false;
+			play.quitAfterPages = 2;
+			play.autoplayKeys.push_back("wait:2000");
+			play.autoplayKeys.push_back("space");
+			play.autoplayKeys.push_back("wait:2000");
+			play.autoplayKeys.push_back("space");
+			const PlayRun run = RunInteractive(play);
+			const bool deviceOrReason = run.stats.audioDevice
+				? !run.stats.audioDeviceInfo.empty()
+				: !run.stats.audioFallback.empty();
+			const bool ok = run.ok && deviceOrReason && run.audioTracks >= 1 &&
+				run.engineFrames > 0 && run.pages >= 1 &&
+				(run.streamsMax >= 1 || !run.stats.audioDevice);
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"device=%s tracks=%zu bgm=\"%s\" frames=%lld streams max=%d%s",
+				run.stats.audioDevice ? run.stats.audioDeviceInfo.c_str()
+					: run.stats.audioFallback.c_str(),
+				run.audioTracks, run.currentBgm.c_str(), (long long)run.engineFrames,
+				run.streamsMax,
+				run.stats.audioDevice ? "" : (run.audioSilent ? " LOOP-MIX SILENT" : " loop-mix"));
+			if(ok)
+				Pass(tally, "play-sound-device", detail);
+			else
+				Fail(tally, "play-sound-device",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+		else
+			Skip(tally, "play-sound-device", "no corpus");
 
 		// 11. the input wiring the real scripts declare: VK code -> script label
 		if(!data.empty() && FileExists(scenePath) && DirExists(extracted))

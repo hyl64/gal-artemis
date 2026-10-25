@@ -497,6 +497,7 @@ namespace artemis
 		int64_t now = 0;
 		bool need = true;
 		bool pageOnScreen = false;
+		bool pageLimitReached = false;
 		int64_t startWall = (int64_t)((double)SDL_GetPerformanceCounter() * 1000.0 /
 			(double)SDL_GetPerformanceFrequency());
 		int64_t lastFrameWall = startWall;
@@ -624,7 +625,21 @@ namespace artemis
 					}
 					if(!options.shotScene.empty() && stats.sceneShot.empty() &&
 						stats.idleSeen)
+					{
+						// the first page of the body, drawn and written: this is the
+						// "clicked start and the story began" evidence
+						host->SetPageText(host->Reveal(fullText, revealed ? revealMs : 0),
+							speaker);
+						host->Compose(canvas, now);
+						std::string shotError;
+						if(!Shot(options.shotScene, shotError))
+						{
+							error = shotError;
+							return stats;
+						}
 						stats.sceneShot = options.shotScene;
+						stats.shots.push_back(options.shotScene);
+					}
 					if(!options.shotDir.empty())
 					{
 						char path[1024];
@@ -640,7 +655,7 @@ namespace artemis
 						stats.shots.push_back(path);
 					}
 					if(options.quitAfterPages > 0 && stats.pages >= options.quitAfterPages)
-						quit = true;
+						pageLimitReached = true;
 				}
 				else if(step.kind == PlayHost::Step::Kind::Idle)
 				{
@@ -722,6 +737,9 @@ namespace artemis
 						capture.insert(capture.end(), audioBlock.begin(), audioBlock.end());
 				}
 			}
+
+			if(pageLimitReached && scriptAt >= script.size())
+				quit = true;
 
 			// --- the clock ------------------------------------------------------
 			const int64_t frameWallEnd = (int64_t)((double)SDL_GetPerformanceCounter() *

@@ -24,7 +24,35 @@ Kept here so a claim in the docs has something to look at.  Two different kinds:
 
 `fx-mutations.py` is the script that breaks each module on purpose and checks
 the self test notices; it rewrites source files, so run it only when the tree is
-clean.
+clean.  It currently covers 11 breakages (the original seven plus colortone's
+clamp, extrans' rounding, excall's return and savetitle's byte-vs-code-point
+truncation); every one is caught.
+
+## Second batch: colortone / extrans / excall / tags / guistate
+
+These five modules are pure logic, so no new pixels are committed here.  Each
+has a command that runs on the real corpus or on a synthetic image:
+
+```
+./build/fxtool tags                 # .ast census: colortone 141, extrans 34,
+                                    # excall 56, cacheclear 292, exfont 266,
+                                    # savetitle 55, movie 5, ...
+./build/fxtool excall               # d09_hy01_1 -> ... -> d09_hy03, depth 6;
+                                    # unresolved targets are listed, no dialogue
+./build/fxtool excall d01_c01_3     # the real nested d01_c01_3 -> d01_c01_4 pair
+./build/fxtool guistate             # the 16 scetween slots, 8 marked real
+./build/fxtool colortone --bench    # 1024x698 sepia time (about 2.4 ms/frame)
+./build/fxtool colortone tests/artifacts/ipt-diff-selfmade.png /tmp/sepia.png \
+    --style sepia
+./build/fxtool extrans tests/artifacts/ipt-diff-selfmade.png /tmp/sepia.png \
+    /tmp/half.png --time 1000 --at 500
+```
+
+The pixel assertions live in `./build/fxtool selftest` (337 passed): colortone's
+Q10 matrix, clamp and identity; extrans' t=0 / mid / end values and the bare
+`{"extrans"}` instant switch; excall's A -> B -> C return chain plus the real
+six-deep chain; savetitle's UTF-8 boundary; and the texture cache's freed count.
+
 
 ## Rights
 

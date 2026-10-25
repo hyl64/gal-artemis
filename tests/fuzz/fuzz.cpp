@@ -219,7 +219,74 @@ namespace
 	// ---------------------------------------------------------------------------
 	// the parsers, each with the invariants a *successful* parse must satisfy
 	// ---------------------------------------------------------------------------
-	Verdict RunPfs(const std::vector<uint8_t>& input);
+	Verdict RunPfs(const std::vector<uint8_t>& input)
+	{
+		// pfs::Read signals failure by throwing, so the exception *type* is part of
+		// the contract: std::runtime_error is a refusal, anything else escaping is a
+		// parser that did not check a size before using it.  (The first version of
+		// this function forgot to return Good() after its try block, which reported
+		// every successful archive as a silent refusal - a reminder that a fuzzer
+		// needs a self test of its own.)
+		artemis::Archive archive;
+		bool refused = false;
+		std::string reason;
+		try
+		{
+			archive = artemis::Read(input);
+		}
+		catch(const std::runtime_error& e)
+		{
+			refused = true;
+			reason = e.what();
+		}
+		catch(const std::exception& e)
+		{
+			Verdict v;
+			v.code = kBadException;
+			v.detail = std::string("escaped as ") + typeid(e).name() + ": " + e.what();
+			return v;
+		}
+		catch(...)
+		{
+			Verdict v;
+			v.code = kBadException;
+			v.detail = "escaped as a non-std exception";
+			return v;
+		}
+		if(refused)
+			return reason.empty() ? SilentReject() : Rejected(reason);
+
+		if(archive.version < 2 || archive.version > 9)
+			return ErrorAsSuccess("version " + std::to_string(archive.version));
+		if(archive.key.size() != 0 && archive.key.size() != 20)
+			return ErrorAsSuccess("index key is " + std::to_string(archive.key.size()) +
+				" bytes, not 20");
+		if(archive.entries.size() > 4000000u)
+			return ErrorAsSuccess("entry count " + std::to_string(archive.entries.size()));
+		const size_t length = archive.length();
+		for(const artemis::Entry& entry : archive.entries)
+		{
+			if(entry.name.empty())
+				return ErrorAsSuccess("an entry has an empty name");
+			if(entry.name.find('\0') != std::string::npos)
+				return ErrorAsSuccess("an entry name contains a NUL");
+			if((uint64_t)entry.offset > (uint64_t)length)
+				return ErrorAsSuccess("entry offset " + std::to_string(entry.offset) +
+					" past the end (" + std::to_string(length) + ")");
+			if((uint64_t)entry.offset + (uint64_t)entry.size > (uint64_t)length)
+				return ErrorAsSuccess("entry '" + entry.name.substr(0, 40) + "' runs " +
+					std::to_string((uint64_t)entry.offset + entry.size - length) +
+					" bytes past the end");
+		}
+		// a listing that claims entries must actually let one be read
+		if(!archive.entries.empty())
+		{
+			const std::vector<uint8_t> sample = artemis::Sample(archive, archive.entries[0], 64);
+			if(sample.size() > archive.entries[0].size)
+				return ErrorAsSuccess("Sample returned more bytes than the entry holds");
+		}
+		return Good();
+	}
 
 	Verdict RunAst(const std::vector<uint8_t>& input)
 	{
@@ -292,7 +359,7 @@ namespace
 			return ErrorAsSuccess("more frames/tiles than bytes");
 		if((ipt.dialect == artemis::IptDialect::Composite) && ipt.width > 0 && ipt.height > 0)
 		{
-			// the same ceiling ComposeIpt uses: 16384 per side and 512 MiB canvas
+			// the same ceiling ComposeIpt uses: 16384 per side and a 512 MiB canvas
 			if(ipt.width > 16384 || ipt.height > 16384)
 				return ErrorAsSuccess("composite canvas " + std::to_string(ipt.width) + "x" +
 					std::to_string(ipt.height) + " passed the size check");
@@ -336,77 +403,6 @@ namespace
 					return ErrorAsSuccess("attribute longer than the file");
 		}
 		return Good();
-	}
-
-	Verdict RunPfs(const std::vector<uint8_t>& input)
-	{
-		// pfs::Read signals failure by throwing, so the exception *type* is part of
-		// the contract: std::runtime_error is a refusal, anything else escaping is a
-		// parser that did not check a size before using it.  (The first version of
-		// this function forgot to return Good() after the try block, which reported
-		// every successful archive as a silent refusal - a reminder that a fuzzer
-		// needs its own self test.)
-		artemis::Archive archive;
-		bool refused = false;
-		std::string reason;
-		try
-		{
-			archive = artemis::Read(input);
-		}
-		catch(const std::runtime_error& e)
-		{
-			refused = true;
-			reason = e.what();
-		}
-		catch(const std::exception& e)
-		{
-			Verdict v;
-			v.code = kBadException;
-			v.detail = std::string("escaped as ") + typeid(e).name() + ": " + e.what();
-			return v;
-		}
-		catch(...)
-		{
-			Verdict v;
-			v.code = kBadException;
-			v.detail = "escaped as a non-std exception";
-			return v;
-		}
-		if(refused)
-			return reason.empty() ? SilentReject() : Rejected(reason);
-
-		if(archive.version < 2 || archive.version > 9)
-			return ErrorAsSuccess("version " + std::to_string(archive.version));
-		if(archive.key.size() != 0 && archive.key.size() != 20)
-			return ErrorAsSuccess("index key is " + std::to_string(archive.key.size()) +
-				" bytes, not 20");
-		if(archive.entries.size() > 4000000u)
-			return ErrorAsSuccess("entry count " + std::to_string(archive.entries.size()));
-		const size_t length = archive.length();
-		for(const artemis::Entry& entry : archive.entries)
-		{
-			if(entry.name.empty())
-				return ErrorAsSuccess("an entry has an empty name");
-			if(entry.name.find('\0') != std::string::npos)
-				return ErrorAsSuccess("an entry name contains a NUL");
-			if((uint64_t)entry.offset > (uint64_t)length)
-				return ErrorAsSuccess("entry offset " + std::to_string(entry.offset) +
-					" past the end (" + std::to_string(length) + ")");
-			if((uint64_t)entry.offset + (uint64_t)entry.size > (uint64_t)length)
-				return ErrorAsSuccess("entry '" + entry.name.substr(0, 40) + "' runs " +
-					std::to_string((uint64_t)entry.offset + entry.size - length) +
-					" bytes past the end");
-		}
-		// a listing that claims entries must actually let one be read
-		if(!archive.entries.empty())
-		{
-			const std::vector<uint8_t> sample = artemis::Sample(archive, archive.entries[0], 64);
-			if(sample.size() > archive.entries[0].size)
-				return ErrorAsSuccess("Sample returned more bytes than the entry holds");
-		}
-		return Good();
-	}
-
 	}
 
 	// ---------------------------------------------------------------------------
@@ -1232,7 +1228,13 @@ namespace
 			if(result.ms > stats.slowestMs)
 				stats.slowestMs = result.ms;
 			if(result.peak > stats.peakBytes)
+			{
 				stats.peakBytes = result.peak;
+				// name the worst allocator, or the number is unactionable
+				fprintf(stderr, "  peak %zu KiB on input %d (%zu bytes, %s, seed %s)\n",
+					result.peak / 1024, i, input.size(), MutationName(kind),
+					StripExtension(seed.name).c_str());
+			}
 
 			if(result.good())
 			{
@@ -1516,9 +1518,10 @@ namespace
 		printf("usage: fuzz <pfs|ast|iet|ipt|asb|all> [--inputs N] [--rng N] [--timeout MS]\n"
 			"            [--memcap MiB] [--corpus DIR] [--out DIR] [--stop-after N]\n"
 			"       fuzz limits [--corpus DIR] [--out DIR]\n"
-			"       fuzz repro <file> <parser>\n");
+			"       fuzz repro <file> <parser>   (fork, deadline bound)\n"
+			"       fuzz direct <file> <parser>  (in-process, sanitizer output on the terminal)\n");
 	}
-}
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -1554,6 +1557,35 @@ int main(int argc, char** argv)
 				outDir = argv[++i];
 		}
 		return RunLimits(corpus, outDir);
+	}
+	if(command == "direct")
+	{
+		// run the parse in this process: a sanitizer report then goes straight to
+		// the terminal and to lldb, which is what a developer needs
+		if(argc < 4)
+		{
+			Usage();
+			return 2;
+		}
+		const Runner runner = RunnerFor(argv[3]);
+		if(runner == nullptr)
+		{
+			fprintf(stderr, "fuzz: unknown parser %s\n", argv[3]);
+			return 2;
+		}
+		std::string bytes;
+		if(!ReadFile(argv[2], bytes))
+		{
+			fprintf(stderr, "fuzz: cannot read %s\n", argv[2]);
+			return 2;
+		}
+		g_ceiling = 512ull * 1024ull * 1024ull;
+		g_ceilingArmed = true;
+		const std::vector<uint8_t> input(bytes.begin(), bytes.end());
+		const Verdict verdict = runner(input);
+		printf("%s: %s  %s\n", argv[2], VerdictName(verdict.code), verdict.detail.c_str());
+		printf("peak %zu KiB over %zu bytes of input\n", g_peakBytes / 1024, input.size());
+		return verdict.code == kOk || verdict.code == kRejected ? 0 : 1;
 	}
 	if(command == "repro")
 	{
