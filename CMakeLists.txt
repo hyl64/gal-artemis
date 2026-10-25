@@ -111,6 +111,15 @@ if(TARGET artemis_fx)
 	target_link_libraries(agame PRIVATE artemis_fx)
 	target_compile_definitions(agame PRIVATE ARTEMIS_AGAME_FX=1)
 endif()
+
+# The interactive window: SDL lives in the front end only, so this file is
+# compiled into agame rather than into the render library.  It sits in a
+# subdirectory because the render library globs src/render/*.cpp and does not
+# descend into src/render/play/ - a file there would otherwise be pulled into a
+# library that knows nothing about SDL's include path.
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/render/play/play.cpp")
+	target_sources(agame PRIVATE src/render/play/play.cpp)
+endif()
 if(TARGET artemis_audio)
 	target_link_libraries(agame PRIVATE artemis_audio
 		"-framework AVFoundation" "-framework AudioToolbox" "-framework CoreAudio")
@@ -129,6 +138,15 @@ endif()
 if(TARGET artemis_save AND EXISTS "${CMAKE_SOURCE_DIR}/tools/savetool.cpp")
 	add_executable(savetool tools/savetool.cpp)
 	target_link_libraries(savetool PRIVATE artemis_save)
+	target_compile_definitions(savetool PRIVATE ARTEMIS_TESTDATA="${ARTEMIS_TESTDATA}")
+	# The end-to-end check (save in one process, load in another, six pages
+	# identical) needs the interpreter.  Without it savetool still builds and the
+	# check reports itself as skipped with the reason.
+	if(TARGET artemis_render)
+		target_link_libraries(savetool PRIVATE artemis_render
+			"-framework CoreText" "-framework CoreGraphics" "-framework ImageIO")
+		target_compile_definitions(savetool PRIVATE ARTEMIS_SAVE_VM=1)
+	endif()
 endif()
 if(TARGET artemis_fx AND EXISTS "${CMAKE_SOURCE_DIR}/tools/fxtool.cpp")
 	add_executable(fxtool tools/fxtool.cpp)

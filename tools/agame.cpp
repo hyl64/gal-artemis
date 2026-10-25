@@ -27,6 +27,7 @@
 
 #include "../src/iet.h"
 #include "../src/render/astscene.h"
+#include "../src/render/play/play.h"
 #include "../src/render/screen.h"
 #include "../src/render/vm.h"
 
@@ -47,6 +48,7 @@
 #include <string>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -530,6 +532,19 @@ namespace
 		std::string startBlock;   // --start-block: jump into the chain
 		bool showText = false;    // print the words (all-ages data only)
 		int maxBlocks = 0;        // 0 = the whole linknext chain
+		// the interactive window
+		bool play = false;
+		bool startAtMenu = true;    // boot -> menu -> click start -> the story
+		bool realTime = false;      // wall clock + pacing (a real window)
+		bool vsync = true;
+		bool hashFrames = false;    // keep a hash per frame for a regression run
+		bool outGiven = false;
+		bool framesGiven = false;
+		std::vector<std::string> autoplayKeys; // scripted input tokens
+		std::string shotTitle;
+		std::string shotScene;
+		std::string shotDir;
+		int quitAfterPages = 0;
 		// audio and effects: opt-in, so the still-frame baseline stays exactly
 		// what it was
 		std::string audioCapture;   // --audio-capture <file.wav>
@@ -788,6 +803,12 @@ namespace
 		bool OnSceneEvent(const artemis::SceneEvent& event, std::string& note);
 
 		bool Capture(const std::string& path, double seconds, std::string& error);
+		// the device callback's entry point: the engine's Mix, no locks, no I/O
+		void Mix(float* out, int frames)
+		{
+			if(m_opened)
+				m_engine.Mix(out, frames);
+		}
 
 		const std::vector<AudioTrackReport>& tracks() const { return m_tracks; }
 		const std::vector<std::string>& notes() const { return m_notes; }
@@ -1876,6 +1897,650 @@ namespace
 		for(size_t i = 0; i < pixels; i++)
 			total += 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
 		return total / (double)pixels;
+	}
+}
+
+// ===========================================================================
+// the interactive front end: a window, clicks, choices, a sound device
+// ===========================================================================
+//
+// This is where the three layers become a game you can sit in front of.  The
+// window itself is `src/render/play/play.cpp` (it owns SDL, the clock and the
+// input); what is here is the *host* it asks: the interpreter, the stage, the
+// effect driver and the mixer, wired into one object.
+//
+// The flow is the release's own, not a script this file invents:
+//
+//   1. `first.iet` boots - styles, macros, the message window - and its last
+//      `[jump]` goes to the menu.  That jump is where the boot *ends*, so the
+//      target is read out of the boot script rather than hardcoded.
+//   2. `main.iet` `*menu` runs and falls through into `*title`, which draws
+//      `bgimage/main` and seven `[button]`s, then `[stop]`s.  A stop is not an
+//      end: the screen stays up and its buttons are clickable.
+//   3. The start button says `file="scenario/scene.iet" label="start"`, so a
+//      click on it is a jump into the story - and the story's pages advance on
+//      clicks like any other galgame.
+//
+// Choices are the one place where a real title is not enough: this corpus' scene
+// has no choice point at all, and the engine's choice UI lives in Lua
+// (`calllua function=select_*` in system_script.asb).  `[select]` is therefore
+// modelled from its own attributes - the option labels of the named script - and
+// drawn in the game's own `select` message style; the self test proves it
+// end-to-end with a fixture written for the purpose.
+//
+// One modelling note that belongs in every report: a `[button ... call="1"]`
+// is run as a *jump*.  The interpreter has no public call entry, so "call and
+// come back" is not modelled; the title's start button is call="0" and does not
+// depend on it.
+
+namespace
+{
+	struct PlayRun
+	{
+		bool ok = false;
+		std::string error;
+		artemis::PlayStats stats;
+		std::string bootSummary;
+		std::string menuTarget;
+		size_t regions = 0;
+		size_t points = 0;
+		std::vector<std::string> regionText;
+		int pages = 0;
+		size_t choiceTotal = 0;
+		int chosen = -1;
+		std::vector<std::string> notes;
+		std::vector<std::string> audioLines;
+		double audioRms = 0;
+		double audioPeak = 0;
+		long long audioFrames = 0;
+		bool audioSilent = true;
+		int msgspeed = 30;
+		int width = 0;
+		int height = 0;
+		int fps = 60;
+	};
+
+	// What the boot script's own final [jump] says: the menu's file and label.
+	bool BootMenuTarget(const artemis::Vm& vm, std::string& file, std::string& label)
+	{
+		const artemis::IetScript* boot = vm.script("first.iet");
+		if(boot == nullptr)
+			return false;
+		const artemis::Item* last = nullptr;
+		for(const artemis::Item& item : boot->items())
+			if(item.kind == artemis::Item::Kind::Command && item.text == "jump")
+				last = &item;
+		if(last == nullptr)
+			return false;
+		file = last->AttrOr("file", std::string());
+		label = last->AttrOr("label", std::string());
+		return !label.empty();
+	}
+
+	class InteractiveHost : public artemis::PlayHost
+	{
+	public:
+		InteractiveHost() : m_scratch(1, 1) {}
+		bool Open(const Options& options, std::string& error);
+
+		artemis::PlayHost::Step Next() override;
+		void SetPageText(const std::string& shown, const std::string& speaker) override
+		{
+			m_page.text = shown;
+			m_page.speaker = speaker;
+			m_stage->SetPage(m_page);
+		}
+		std::string Reveal(const std::string& text, int64_t ms) override;
+		int64_t RevealMs(const std::string& text) override;
+		void Compose(artemis::Canvas& canvas, int64_t nowMs) override;
+		void OnFrame(int64_t nowMs) override
+		{
+			m_now = nowMs;
+			m_sink.now = nowMs;
+		}
+
+		int RegionCount() const override { return (int)m_vm->clickRegions().size(); }
+		bool RegionRect(int index, int& left, int& top, int& width, int& height) const override
+		{
+			return m_vm->RegionBox(index, left, top, width, height);
+		}
+		bool RegionHit(int index, int x, int y) const override
+		{
+			return m_vm->RegionHit(index, x, y);
+		}
+		void ActivateRegion(int index) override;
+
+		int ChoiceCount() const override { return (int)m_choices.size(); }
+		bool ChoiceRect(int index, int& left, int& top, int& width, int& height) const override;
+		void Choose(int index) override;
+		void MixAudio(float* out, int frames) override;
+
+		// for the report
+		const artemis::Vm& vm() const { return *m_vm; }
+		const artemis::Stage& stage() const { return *m_stage; }
+		const std::string& bootSummary() const { return m_vm->bootSummary(); }
+		const std::string& menuTarget() const { return m_menuTarget; }
+		const std::vector<std::string>& notes() const { return m_notes; }
+		const std::vector<std::string>& audioLines() const { return m_audioLines; }
+		int msgspeed() const { return m_msgspeed; }
+		size_t choiceTotal() const { return m_choiceTotal; }
+		int chosen() const { return m_chosen; }
+		double audioRms() const { return m_audioRms; }
+		double audioPeak() const { return m_audioPeak; }
+		long long audioFrames() const { return m_audioFrames; }
+		int width() const { return m_stage->width(); }
+		int height() const { return m_stage->height(); }
+		int fps() const { return m_fps; }
+
+	private:
+		struct Sink : artemis::Vm::TagSink
+		{
+			AudioBridge* audio = nullptr;
+			FxDriver* fx = nullptr;
+			artemis::Stage* stage = nullptr;
+			std::vector<std::string>* notes = nullptr;
+			int64_t now = 0;
+
+			void OnTag(const artemis::Vm::TagEvent& tag) override
+			{
+				if(fx != nullptr)
+					fx->OnTag(tag, now, stage);
+				if(audio != nullptr && audio->open())
+				{
+					std::string note;
+					if(!audio->OnTag(tag.name, tag.attributes, note) && !note.empty() &&
+						notes != nullptr && notes->size() < 24)
+						notes->push_back(tag.file + ":" + std::to_string(tag.line) + ": " + note);
+				}
+			}
+		};
+
+		struct ChoiceView
+		{
+			std::string text;
+			int left = 0;
+			int top = 0;
+			int width = 0;
+			int height = 0;
+		};
+
+		Options m_options;
+		artemis::AssetSource m_assets;
+		artemis::TextureCache m_textures;
+		artemis::FontLibrary m_fonts;
+		std::unique_ptr<artemis::Stage> m_stage;
+		std::unique_ptr<artemis::Vm> m_vm;
+		FxDriver m_fx;
+		AudioBridge m_audio;
+		bool m_audioOpen = false;
+		Sink m_sink;
+		artemis::PageText m_page;
+		artemis::Canvas m_scratch;
+		std::string m_revealText;
+		artemis::fx::Text m_segmented;
+		int m_msgspeed = 30;
+		int m_fps = 60;
+		std::string m_menuTarget;
+		bool m_inMenu = false;
+		std::vector<ChoiceView> m_choices;
+		size_t m_choiceTotal = 0;
+		int m_chosen = -1;
+		std::vector<std::string> m_notes;
+		std::vector<std::string> m_audioLines;
+		double m_audioRms = 0;
+		double m_audioPeak = 0;
+		long long m_audioFrames = 0;
+		long long m_audioSamples = 0;
+		int64_t m_now = 0;
+	};
+
+	bool InteractiveHost::Open(const Options& options, std::string& error)
+	{
+		m_options = options;
+		if(!options.archive.empty() && !m_assets.AddArchive(options.archive, error))
+			return false;
+		if(!options.dataDir.empty() && !m_assets.AddDirectory(options.dataDir, error))
+			return false;
+		if(m_assets.empty())
+		{
+			error = "no data: pass --data-dir <extracted> and/or --archive <root.pfs>";
+			return false;
+		}
+		StageSettings settings;
+		{
+			std::vector<uint8_t> bytes;
+			std::string resolved, readError;
+			if(m_assets.Read("system.ini", bytes, resolved, readError))
+				settings = ReadSystemIni(artemis::DecodeScenarioText(bytes.data(), bytes.size()));
+		}
+		if(options.haveSize)
+		{
+			settings.width = options.width;
+			settings.height = options.height;
+			settings.fromIni = false;
+		}
+		m_fps = settings.fps;
+		m_stage.reset(new artemis::Stage(settings.width, settings.height));
+		m_stage->SetFonts(&m_fonts);
+		m_scratch = artemis::Canvas(settings.width, settings.height);
+
+		artemis::Vm::Config config;
+		config.assets = &m_assets;
+		config.stage = m_stage.get();
+		config.cache = &m_textures;
+		config.fonts = &m_fonts;
+		config.bootFile = options.boot;
+		config.verbose = options.verbose;
+		m_vm.reset(new artemis::Vm(config));
+		if(!m_vm->Boot(error))
+		{
+			error = "boot: " + error;
+			return false;
+		}
+
+		// the fonts the game's own [font] blocks named
+		for(const std::string& name : m_stage->styleNames())
+		{
+			const std::string face = m_stage->Style(name).face;
+			if(face.empty() || m_fonts.Has(face))
+				continue;
+			std::vector<uint8_t> bytes;
+			std::string resolved, readError;
+			if(!m_assets.Read(face, bytes, resolved, readError))
+				continue;
+			std::string fontError;
+			if(!m_fonts.Load(face, bytes, fontError) && options.verbose)
+				fprintf(stderr, "agame: font %s: %s\n", face.c_str(), fontError.c_str());
+		}
+
+		// the game's own milliseconds per glyph
+		const std::string msgspeed = m_vm->Get("g.msgspeed");
+		if(!msgspeed.empty())
+			m_msgspeed = atoi(msgspeed.c_str());
+		m_fx.SetMsgspeed(m_msgspeed);
+		m_fx.SetTypewriter(true);
+
+		if(options.audio || !options.audioCapture.empty())
+		{
+			AudioBridge::Config audioConfig;
+			audioConfig.assets = &m_assets;
+			audioConfig.workDir = "/tmp/agame-audio";
+			std::string audioError;
+			if(m_audio.Open(audioConfig, audioError))
+			{
+				m_audioOpen = true;
+				m_sink.audio = &m_audio;
+			}
+			else
+			{
+				m_notes.push_back("audio: " + audioError);
+				fprintf(stderr, "agame: audio: %s\n", audioError.c_str());
+			}
+		}
+		m_sink.fx = &m_fx;
+		m_sink.stage = m_stage.get();
+		m_sink.notes = &m_notes;
+		m_vm->SetTagSink(&m_sink);
+
+		// where the boot's own last [jump] goes: the menu
+		std::string menuFile, menuLabel;
+		if(BootMenuTarget(*m_vm, menuFile, menuLabel) && options.startAtMenu)
+		{
+			m_menuTarget = (menuFile.empty() ? std::string("(this file)") : menuFile) + ":" +
+				menuLabel;
+			if(!m_vm->Start(menuFile, menuLabel, error))
+			{
+				error = "menu: " + error;
+				return false;
+			}
+			m_inMenu = true;
+		}
+		else
+		{
+			const std::string script = options.script.empty() ? "scenario/scene.iet"
+				: options.script;
+			if(!m_vm->Start(script, options.label, error))
+				return false;
+			m_menuTarget = "(boot jump skipped: straight to " + script + ")";
+		}
+		return true;
+	}
+
+	artemis::PlayHost::Step InteractiveHost::Next()
+	{
+		for(int guard = 0; guard < 1000000; guard++)
+		{
+			const artemis::Vm::Event event = m_vm->Next();
+			if(event.kind == artemis::Vm::Event::Kind::Page)
+			{
+				if(event.speaker.empty() && event.text.empty())
+					continue;
+				if(m_options.verbose)
+					fprintf(stderr, "[page] %s:%d speaker=\"%s\" %zu chars\n",
+						event.file.c_str(), event.line, event.speaker.c_str(),
+						event.text.size());
+				artemis::PlayHost::Step step;
+				step.kind = artemis::PlayHost::Step::Kind::Page;
+				step.text = event.text;
+				step.speaker = event.speaker;
+				return step;
+			}
+			if(event.kind == artemis::Vm::Event::Kind::Select)
+			{
+				// the options are on screen: draw them and wait for the pick
+				m_choices.clear();
+				const artemis::TextStyle& style = m_stage->Style("select");
+				const int rowHeight = std::max(20, style.size + style.lineSpacing + 16);
+				for(size_t i = 0; i < event.choices.size(); i++)
+				{
+					ChoiceView view;
+					view.text = event.choices[i].text;
+					view.left = 0;
+					view.top = style.top + (int)i * rowHeight;
+					view.width = m_stage->width();
+					view.height = rowHeight;
+					m_choices.push_back(view);
+				}
+				m_choiceTotal = m_choices.size();
+				artemis::PlayHost::Step step;
+				step.kind = artemis::PlayHost::Step::Kind::Idle;
+				return step;
+			}
+			if(event.kind == artemis::Vm::Event::Kind::Stop)
+			{
+				// [stop] parks the script: the screen stays, its buttons are live
+				if(m_options.verbose)
+					fprintf(stderr, "[idle] %s:%d [stop], %zu click region(s)\n",
+						event.file.c_str(), event.line, m_vm->clickRegions().size());
+				artemis::PlayHost::Step step;
+				step.kind = artemis::PlayHost::Step::Kind::Idle;
+				return step;
+			}
+			if(event.kind == artemis::Vm::Event::Kind::Error)
+			{
+				artemis::PlayHost::Step step;
+				step.kind = artemis::PlayHost::Step::Kind::Error;
+				step.error = event.file + ":" + std::to_string(event.line) + ": " + event.error;
+				return step;
+			}
+		}
+		artemis::PlayHost::Step step;
+		step.kind = artemis::PlayHost::Step::Kind::End;
+		return step;
+	}
+
+	std::string InteractiveHost::Reveal(const std::string& text, int64_t ms)
+	{
+		if(text != m_revealText)
+		{
+			m_revealText = text;
+			m_segmented = artemis::fx::Segment(text);
+		}
+		return artemis::fx::RevealAt(m_segmented, ms, m_msgspeed).shown;
+	}
+
+	int64_t InteractiveHost::RevealMs(const std::string& text)
+	{
+		if(text != m_revealText)
+		{
+			m_revealText = text;
+			m_segmented = artemis::fx::Segment(text);
+		}
+		return artemis::fx::RevealDurationMs(m_segmented, m_msgspeed);
+	}
+
+	void InteractiveHost::ActivateRegion(int index)
+	{
+		const std::vector<artemis::Vm::ClickRegion>& regions = m_vm->clickRegions();
+		if(index < 0 || index >= (int)regions.size())
+			return;
+		const artemis::Vm::ClickRegion& region = regions[index];
+		if(region.call && m_notes.size() < 32)
+			m_notes.push_back("button " + region.id + " asks for call=\"1\": run as a jump, "
+				"the return is not modelled");
+		std::string error;
+		m_vm->JumpTo(region.file, region.label, error);
+		if(!error.empty())
+			m_notes.push_back("button " + region.id + ": " + error);
+		else if(m_notes.size() < 32)
+			m_notes.push_back("button " + region.id + " -> " +
+				(region.file.empty() ? std::string("(this file)") : region.file) + ":" +
+				region.label);
+		m_inMenu = false;
+	}
+
+	bool InteractiveHost::ChoiceRect(int index, int& left, int& top, int& width,
+		int& height) const
+	{
+		if(index < 0 || index >= (int)m_choices.size())
+			return false;
+		left = m_choices[index].left;
+		top = m_choices[index].top;
+		width = m_choices[index].width;
+		height = m_choices[index].height;
+		return true;
+	}
+
+	void InteractiveHost::Choose(int index)
+	{
+		if(index < 0 || index >= (int)m_choices.size())
+			return;
+		if(m_choices[index].text.size() > 40)
+			m_choices[index].text = m_choices[index].text.substr(0, 40);
+		const std::string text = m_choices[index].text;
+		std::string error;
+		if(!m_vm->ResolveChoice(index, error))
+			m_notes.push_back("choice: " + error);
+		else if(m_notes.size() < 32)
+			m_notes.push_back("chose option " + std::to_string(index + 1) + ": " + text);
+		m_chosen = index + 1;
+		m_choices.clear();
+	}
+
+	void InteractiveHost::Compose(artemis::Canvas& canvas, int64_t nowMs)
+	{
+		m_fx.ApplyLayers(*m_stage, nowMs);
+		std::string error;
+		m_stage->Composite(canvas, true, error);
+		// choices on top, in the game's own `select` message style
+		if(!m_choices.empty())
+		{
+			const artemis::TextStyle base = m_stage->Style("select");
+			for(const ChoiceView& view : m_choices)
+			{
+				artemis::TextStyle row = base;
+				row.top = 0;
+				row.height = view.height;
+				artemis::RgbaImage bitmap;
+				int glyphs = 0;
+				if(!m_fonts.Render(row, view.text, bitmap, glyphs, error))
+					continue;
+				canvas.Blend(bitmap.rgba.data(), bitmap.width, bitmap.height, view.left,
+					view.top, 255);
+			}
+		}
+		m_fx.ApplyCanvas(canvas, nowMs);
+		const int dx = m_fx.Dx(nowMs);
+		const int dy = m_fx.Dy(nowMs);
+		if(dx != 0 || dy != 0)
+		{
+			// the whole picture moves, so it moves after compositing
+			TranslateCanvas(m_scratch, canvas, dx, dy);
+			memcpy(canvas.data(), m_scratch.data(), canvas.byteSize());
+		}
+	}
+
+	void InteractiveHost::MixAudio(float* out, int frames)
+	{
+		if(!m_audioOpen)
+		{
+			memset(out, 0, (size_t)frames * 2 * sizeof(float));
+			return;
+		}
+		m_audio.Mix(out, frames);
+		m_audioFrames += frames;
+		double sum = 0;
+		for(int i = 0; i < frames * 2; i++)
+		{
+			const double sample = (double)out[i];
+			sum += sample * sample;
+			const double magnitude = std::fabs(sample);
+			if(magnitude > m_audioPeak)
+				m_audioPeak = magnitude;
+		}
+		const long long samples = (long long)frames * 2;
+		m_audioRms = std::sqrt((m_audioRms * m_audioRms * (double)m_audioSamples + sum) /
+			(double)(m_audioSamples + samples));
+		m_audioSamples += samples;
+	}
+
+	PlayRun RunInteractive(const Options& options);
+}
+
+static PlayRun RunInteractiveImpl(const Options& options)
+{
+	PlayRun run;
+	InteractiveHost host;
+	std::string error;
+	if(!host.Open(options, error))
+	{
+		run.error = error;
+		return run;
+	}
+	run.width = host.width();
+	run.height = host.height();
+	run.fps = host.fps();
+	run.bootSummary = host.bootSummary();
+	run.menuTarget = host.menuTarget();
+	run.msgspeed = host.msgspeed();
+
+	artemis::PlayOptions play;
+	play.width = host.width();
+	play.height = host.height();
+	play.fps = host.fps();
+	play.maxPages = options.maxPages > 0 ? options.maxPages : 100;
+	play.realTime = options.realTime;
+	play.vsync = options.vsync;
+	play.audio = options.audio || !options.audioCapture.empty();
+	play.script = options.autoplayKeys;
+	play.shotTitle = options.shotTitle;
+	play.shotScene = options.shotScene;
+	play.shotDir = options.shotDir;
+	play.quitAfterPages = options.quitAfterPages;
+	play.hashFrames = options.hashFrames;
+	play.maxFrames = options.realTime ? host.fps() * 60 * 10 : 4000;
+	play.capturePath = options.audioCapture;
+	play.captureSeconds = options.audioSeconds;
+
+	artemis::Player player;
+	if(!player.Open(play, host, error))
+	{
+		run.error = error;
+		return run;
+	}
+	run.stats = player.Run(error);
+	player.Close();
+	if(!error.empty())
+	{
+		run.error = error;
+		return run;
+	}
+	run.ok = true;
+	run.pages = run.stats.pages;
+	run.regions = host.vm().clickRegions().size();
+	run.choiceTotal = host.choiceTotal();
+	run.chosen = host.chosen();
+	run.notes = host.notes();
+	run.audioLines = host.audioLines();
+	run.audioRms = host.audioRms();
+	run.audioPeak = host.audioPeak();
+	run.audioFrames = host.audioFrames();
+	run.audioSilent = host.audioPeak() < 1.0 / 32768.0;
+	for(size_t i = 0; i < host.vm().clickRegions().size() && i < 10; i++)
+	{
+		const artemis::Vm::ClickRegion& region = host.vm().clickRegions()[i];
+		int left = 0, top = 0, width = 0, height = 0;
+		host.vm().RegionBox((int)i, left, top, width, height);
+		char line[384];
+		snprintf(line, sizeof line, "    region %-4s %4d,%-4d %3dx%-3d -> %s:%s%s",
+			region.id.empty() ? "(point)" : region.id.c_str(), left, top, width, height,
+			region.file.empty() ? "(this file)" : region.file.c_str(), region.label.c_str(),
+			region.call ? " (call=1, run as a jump)" : "");
+		run.regionText.push_back(line);
+		if(region.id.empty())
+			run.points++;
+	}
+	return run;
+}
+
+namespace
+{
+	PlayRun RunInteractive(const Options& options) { return RunInteractiveImpl(options); }
+
+	void PrintPlayReport(const PlayRun& run)
+	{
+		const artemis::PlayStats& stats = run.stats;
+		printf("\n--- the window ---------------------------------------------------------\n");
+		printf("stage: %dx%d at fps=%d (from the game's own system.ini)\n", run.width,
+			run.height, run.fps);
+		printf("video driver: %s; audio driver: %s (%s)\n", stats.videoDriver.c_str(),
+			stats.audioDriver.c_str(),
+			stats.audioDevice ? "device open" : "no device - mixing in the loop");
+		if(!stats.audioFallback.empty())
+			printf("audio fallback: %s\n", stats.audioFallback.c_str());
+		printf("clock: %s\n", stats.realTime ? "wall clock, paced" : "virtual (1/60 s per "
+			"frame, no sleeping)");
+		printf("%s\n", run.bootSummary.c_str());
+		printf("menu entry: %s\n", run.menuTarget.c_str());
+		printf("g.msgspeed: %d ms per glyph\n", run.msgspeed);
+
+		printf("\n--- what happened ------------------------------------------------------\n");
+		printf("pages shown: %d, frames: %d, advances: %d, clicks: %d, keys: %d\n",
+			stats.pages, stats.frames, stats.advances, stats.clicks, stats.keys);
+		printf("clicks that finished the typing instead of advancing: %d\n",
+			stats.completedReveals);
+		printf("idle screen reached: %s; script ended: %s\n", stats.idleSeen ? "yes" : "no",
+			stats.ended ? "yes" : "no");
+		printf("click regions: %zu (%zu from [point])\n", run.regions, run.points);
+		for(const std::string& line : run.regionText)
+			printf("%s\n", line.c_str());
+		if(run.choiceTotal > 0)
+			printf("choices offered: %zu; chosen: %d\n", run.choiceTotal, run.chosen);
+
+		printf("\n--- timing -------------------------------------------------------------\n");
+		printf("frame time: avg %.3f ms, p50 %.3f ms, p95 %.3f ms, max %.3f ms over %d "
+			"frame(s)\n", stats.frameAvgMs, stats.frameP50Ms, stats.frameP95Ms,
+			stats.frameMaxMs, stats.frames);
+		printf("click -> page: avg %.2f ms, max %.2f ms over %d sample(s)\n",
+			stats.latencyAvgMs, stats.latencyMaxMs, stats.latencySamples);
+		printf("wall time: %.1f ms; peak RSS: %.1f MB\n", stats.wallMs,
+			(double)stats.peakRss / (1024.0 * 1024.0));
+
+		printf("\n--- sound --------------------------------------------------------------\n");
+		printf("frames mixed: %lld; rms=%.4f peak=%.3f%s\n", run.audioFrames, run.audioRms,
+			run.audioPeak, run.audioSilent ? " SILENT" : "");
+		for(const std::string& line : run.audioLines)
+			printf("    %s\n", line.c_str());
+		if(!run.notes.empty())
+		{
+			printf("notes:\n");
+			for(size_t i = 0; i < run.notes.size() && i < 12; i++)
+				printf("    %s\n", run.notes[i].c_str());
+		}
+		if(!stats.frameHashes.empty())
+		{
+			uint64_t fold = 0;
+			for(uint64_t hash : stats.frameHashes)
+				fold = fold * 1099511628211ull + hash;
+			printf("frame hash chain: %016llx over %zu frame(s)\n",
+				(unsigned long long)fold, stats.frameHashes.size());
+		}
+		for(const std::string& shot : stats.shots)
+			printf("screenshot: %s\n", shot.c_str());
+		if(!stats.titleShot.empty())
+			printf("screenshot (idle screen): %s\n", stats.titleShot.c_str());
+		if(!stats.sceneShot.empty())
+			printf("screenshot (first story page): %s\n", stats.sceneShot.c_str());
 	}
 }
 
@@ -4075,9 +4740,15 @@ int main(int argc, char** argv)
 		else if(arg == "--label" && hasValue)
 			options.label = argv[++i];
 		else if(arg == "--frames" && hasValue)
+		{
 			framesDir = argv[++i];
+			options.framesGiven = true;
+		}
 		else if(arg == "--out" && hasValue)
+		{
 			options.out = argv[++i];
+			options.outGiven = true;
+		}
 		else if((arg == "--max-pages" || arg == "--pages") && hasValue)
 			options.maxPages = atoi(argv[++i]);
 		else if(arg == "--frame-prefix" && hasValue)
@@ -4106,6 +4777,50 @@ int main(int argc, char** argv)
 			options.fx = true;
 		else if(arg == "--fx-at" && hasValue)
 			options.fxAt = atof(argv[++i]);
+		else if(arg == "--play")
+			options.play = true;
+		else if(arg == "--no-menu")
+			options.startAtMenu = false;
+		else if(arg == "--real-time")
+			options.realTime = true;
+		else if(arg == "--no-vsync")
+			options.vsync = false;
+		else if(arg == "--hash-frames")
+			options.hashFrames = true;
+		else if((arg == "--autoplay-keys" || arg == "--keys") && hasValue)
+		{
+			std::string list = argv[++i];
+			size_t at = 0;
+			while(at <= list.size())
+			{
+				const size_t comma = list.find(',', at);
+				const std::string part = list.substr(at,
+					comma == std::string::npos ? std::string::npos : comma - at);
+				if(!part.empty())
+					options.autoplayKeys.push_back(part);
+				if(comma == std::string::npos)
+					break;
+				at = comma + 1;
+			}
+			options.play = true;
+		}
+		else if(arg == "--shot-title" && hasValue)
+		{
+			options.shotTitle = argv[++i];
+			options.play = true;
+		}
+		else if(arg == "--shot-scene" && hasValue)
+		{
+			options.shotScene = argv[++i];
+			options.play = true;
+		}
+		else if(arg == "--shot-dir" && hasValue)
+		{
+			options.shotDir = argv[++i];
+			options.play = true;
+		}
+		else if(arg == "--play-pages" && hasValue)
+			options.quitAfterPages = atoi(argv[++i]);
 		else if(arg == "--size" && hasValue)
 		{
 			options.size = argv[++i];
@@ -4132,6 +4847,44 @@ int main(int argc, char** argv)
 
 	if(!options.astInfoPath.empty())
 		return RunAstInfo(options);
+
+	// The interactive window.  `--play` asks for it; a bare
+	// `agame --script … --data-dir …` asks for it too, but only on a terminal:
+	// a piped or CI run must not open a window (not even a dummy one) by
+	// accident, so it keeps the still-frame behaviour and gets told how to ask.
+	{
+		const bool ietWanted = ietMode || (!astPath.empty() && astPath.size() > 4 &&
+			astPath.compare(astPath.size() - 4, 4, ".iet") == 0);
+		bool wantPlay = options.play;
+		if(!wantPlay && ietWanted && !options.framesGiven && !options.outGiven)
+		{
+			if(isatty(STDOUT_FILENO) != 0)
+				wantPlay = true;
+			else
+				fprintf(stderr, "agame: no --frames/--out and stdout is not a terminal: "
+					"pass --play to open the window, or --frames <dir> for a still run\n");
+		}
+		if(wantPlay)
+		{
+			if(!ietWanted)
+			{
+				fprintf(stderr, "agame: --play needs --script <scene.iet> and data "
+					"(--data-dir/--archive): a shipped .ast title has no first.iet menu\n");
+				return 2;
+			}
+			const PlayRun run = RunInteractive(options);
+			if(!run.ok)
+			{
+				fprintf(stderr, "agame: %s\n", run.error.c_str());
+				return 1;
+			}
+			PrintPlayReport(run);
+			const bool good = run.pages > 0 && run.stats.frames > 0;
+			printf("verdict: %s\n", good ? "the game ran and advanced by clicks"
+				: "nothing was advanced");
+			return good ? 0 : 1;
+		}
+	}
 
 	if(ietMode || (!astPath.empty() && astPath.size() > 4 &&
 		astPath.compare(astPath.size() - 4, 4, ".iet") == 0))

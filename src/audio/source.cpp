@@ -471,6 +471,8 @@ void Stream::Mix(float* out, int frames) {
 		impl.seenFadeGen = gen;
 		const float target = fadeTarget_.load(std::memory_order_relaxed);
 		const int ms = fadeMs_.load(std::memory_order_relaxed);
+		const float from = fadeFrom_.load(std::memory_order_relaxed);
+		if (from >= 0.0f) impl.gain = from; // explicit fade-in start
 		const int fadeFrames = ms > 0 ? (int)((int64_t)ms * impl.engineRate / 1000) : 0;
 		if (fadeFrames <= 0) {
 			impl.gain = target;
@@ -508,7 +510,15 @@ void Stream::Mix(float* out, int frames) {
 int Stream::Buffered() { return impl_ ? impl_->ring.Readable() : 0; }
 
 void Stream::FadeTo(float target, int ms) {
+	fadeFrom_.store(-1.0f, std::memory_order_relaxed);
 	fadeTarget_.store(target, std::memory_order_relaxed);
+	fadeMs_.store(ms, std::memory_order_relaxed);
+	fadeGen_.fetch_add(1, std::memory_order_release);
+}
+
+void Stream::FadeFromTo(float from, float to, int ms) {
+	fadeFrom_.store(from, std::memory_order_relaxed);
+	fadeTarget_.store(to, std::memory_order_relaxed);
 	fadeMs_.store(ms, std::memory_order_relaxed);
 	fadeGen_.fetch_add(1, std::memory_order_release);
 }

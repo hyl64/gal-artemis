@@ -17,6 +17,7 @@
 // exercised here is the real one; only the final hand-off is stubbed.
 
 #include "../src/audio/audio.h"
+#include "../src/audio/device.h"
 
 #include <algorithm>
 #include <chrono>
@@ -458,6 +459,87 @@ int CommandPlay(const std::string& path, bool loop, double seconds, const std::s
 // ---------------------------------------------------------------------------
 // selftest
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// devices / device - the real hardware path
+// ---------------------------------------------------------------------------
+int CommandDevices() {
+	const DeviceList list = Device::Enumerate();
+	std::printf("devices with output channels: %zu\n", list.devices.size());
+	for (size_t i = 0; i < list.devices.size(); i++)
+		std::printf("  [%zu]%s %-28s %d ch  %.0f Hz\n", i, (int)i == list.defaultIndex ? " *" : "  ",
+		            list.devices[i].name.c_str(), list.devices[i].outputChannels, list.devices[i].sampleRate);
+	const DeviceTarget target = Device::QueryDefault();
+	if (!target.available) {
+		std::printf("default output: unavailable - %s\n", target.reason.c_str());
+		return 1;
+	}
+	std::printf("default output: %s  %.0f Hz  %d ch  buffer %d frames\n", target.name.c_str(), target.sampleRate,
+	            target.channels, target.bufferFrames);
+	return 0;
+}
+
+int CommandDevice(const std::string& path, bool loop, double seconds, const std::string& seName) {
+	std::string dir = ".";
+	std::string base = path;
+	const size_t slash = path.find_last_of('/');
+	if (slash != std::string::npos) {
+		dir = path.substr(0, slash);
+		base = path.substr(slash + 1);
+	}
+
+	const DeviceTarget target = Device::QueryDefault();
+	if (!target.available) {
+		std::printf("device: no output device - %s\n", target.reason.c_str());
+		std::printf("device: FALLING BACK to offline rendering (no silent failure)\n");
+		return CommandPlay(path, loop, seconds, seName);
+	}
+
+	std::printf("device: %s  %.0f Hz  %d ch  buffer %d frames\n", target.name.c_str(), target.sampleRate,
+	            target.channels, target.bufferFrames);
+
+	Engine engine;
+	Engine::Config cfg;
+	cfg.assetRoot = dir;
+	cfg.sampleRate = (int)target.sampleRate; // mixer runs at the device rate
+	std::string error;
+	if (!engine.Open(cfg, &error)) {
+		std::fprintf(stderr, "device: engine: %s\n", error.c_str());
+		return 1;
+	}
+	if (!engine.PlayBgm(base, loop, 0)) {
+		std::fprintf(stderr, "device: cannot play %s\n", base.c_str());
+		return 1;
+	}
+	if (!seName.empty()) engine.PlaySe(seName, -1);
+
+	Device device;
+	std::string reason;
+	if (!device.Open(&engine, target, &reason) || !device.Start(&reason)) {
+		std::printf("device: FALLING BACK to offline rendering: %s\n", reason.c_str());
+		engine.Shutdown();
+		return CommandPlay(path, loop, seconds, seName);
+	}
+
+	std::printf("device: playing %s for %.1f s on real hardware (listen)\n", base.c_str(), seconds);
+	std::this_thread::sleep_for(std::chrono::milliseconds((int)(seconds * 1000.0)));
+	device.RefreshStats();
+	const CallbackStats st = device.Stats();
+	const double periodMs = 1000.0 * (double)device.BufferFrames() / target.sampleRate;
+	std::printf("callbacks:   %llu over %llu frames\n", (unsigned long long)st.callbacks,
+	            (unsigned long long)st.frames);
+	std::printf("interval:    p50 %.3f ms  p99 %.3f ms  max %.3f ms  (period %.3f ms)\n", st.intervalP50Ms,
+	            st.intervalP99Ms, st.intervalMaxMs, periodMs);
+	std::printf("jitter:      %.4f ms (std dev around p50)\n", st.intervalJitterMs);
+	std::printf("work:        p50 %.1f us  p99 %.1f us  max %.1f us\n", st.workP50Us, st.workP99Us, st.workMaxUs);
+	std::printf("underruns:   %llu\n", (unsigned long long)st.underruns);
+	std::printf("dropped:     %llu timing samples (capture array full)\n", (unsigned long long)st.dropped);
+	device.Stop();
+	device.Close();
+	engine.Shutdown();
+	return 0;
+}
+
 // ===========================================================================
 // selftest - assertions over real game data
 // ===========================================================================
@@ -528,6 +610,8 @@ uint64_t Checksum(const float* p, size_t n) {
 }
 
 } // namespace
+
+int RunSecondBatch(const std::string& dataHint);
 
 int RunSelfTest(const std::string& dataHint) {
 	const bool breakIt = std::getenv("AUDIOTOOL_SELFTEST_BREAK") != nullptr;
@@ -835,10 +919,644 @@ int RunSelfTest(const std::string& dataHint) {
 		}
 	}
 
+	RunSecondBatch(dataHint);
+
 	std::printf("\n%d checks, %d failed, %d skipped\n", gChecks, gFailures, gSkips);
 	if (gFailures == 0) std::printf("RESULT: OK\n");
 	else std::printf("RESULT: FAILED\n");
 	return gFailures == 0 ? 0 : 1;
+}
+
+// ===========================================================================
+// second batch: real device output, mixing behaviour, boundary cases
+// ===========================================================================
+namespace {
+
+double PercentileOf(std::vector<double> v, double q) {
+	if (v.empty()) return 0.0;
+	std::sort(v.begin(), v.end());
+	const size_t i = (size_t)(q * (double)(v.size() - 1));
+	return v[std::min(i, v.size() - 1)];
+}
+
+bool FilePresent(const std::string& path) {
+	std::FILE* f = std::fopen(path.c_str(), "rb");
+	if (!f) return false;
+	std::fclose(f);
+	return true;
+}
+
+// Renders `frames` through an Engine, pacing on BufferedFrames() so the decoder
+// thread can keep up exactly as a device would.
+void RenderEngine(Engine& engine, int frames, std::vector<float>* out) {
+	out->assign((size_t)frames * 2, 0.0f);
+	const int tick = 512;
+	std::vector<float> block((size_t)tick * 2, 0.0f);
+	int done = 0;
+	while (done < frames) {
+		const int n = std::min(tick, frames - done);
+		WaitForMix(engine, n);
+		engine.Mix(block.data(), n);
+		std::memcpy(&(*out)[(size_t)done * 2], block.data(), (size_t)n * 2 * sizeof(float));
+		done += n;
+	}
+}
+
+double WindowRms(const std::vector<float>& v, int startFrame, int frames) {
+	double sum = 0.0;
+	for (int i = 0; i < frames; i++)
+		for (int c = 0; c < 2; c++) {
+			const double s = v[(size_t)((startFrame + i) * 2 + c)];
+			sum += s * s;
+		}
+	return frames ? std::sqrt(sum / ((double)frames * 2.0)) : 0.0;
+}
+
+// Largest jump between neighbouring samples anywhere in a buffer: the objective
+// measure of a "click".
+double MaxAdjacentJump(const std::vector<float>& v) {
+	double worst = 0.0;
+	for (size_t i = 2; i < v.size(); i += 2) {
+		const double d = std::fabs((double)v[i] - (double)v[i - 2]);
+		if (d > worst) worst = d;
+	}
+	return worst;
+}
+
+// Writes a sine tone to an Ogg Vorbis file with ffmpeg.  Only used for cases the
+// shipped data does not cover (a clip shorter than 100 ms, and a bank of eight
+// distinct effects); everything else uses real game audio.
+bool MakeTone(const std::string& path, double seconds, double hertz) {
+	char command[1024];
+	std::snprintf(command, sizeof command,
+	              "/opt/homebrew/bin/ffmpeg -y -loglevel error -f lavfi -i "
+	              "\"sine=frequency=%.1f:duration=%.3f\" -af volume=4.0 -ar 44100 -ac 2 -c:a vorbis -strict -2 \"%s\" "
+	              ">/dev/null 2>&1",
+	              hertz, seconds, path.c_str());
+	if (std::system(command) != 0) return false;
+	return FilePresent(path);
+}
+
+} // namespace
+
+int RunSecondBatch(const std::string& dataHint) {
+	const bool breakIt = std::getenv("AUDIOTOOL_SELFTEST_BREAK") != nullptr;
+	const std::string moon = Locate(dataHint, "artemis-nicolan/extracted/bgm/moon.ogg");
+	const std::string niji = Locate(dataHint, "artemis-nicolan/extracted/bgm/niji.ogg");
+	const std::string mono = Locate(dataHint, "artemis-nicolan/extracted/se/biyobiyo.ogg");
+	const std::string kisya = Locate(dataHint, "artemis-nicolan/extracted/se/kisya.ogg");
+	std::string root = moon;
+	const size_t lastSlash = root.find_last_of('/');
+	if (lastSlash != std::string::npos) root = root.substr(0, lastSlash);
+	if (root.size() > 4 && root.compare(root.size() - 4, 4, "/bgm") == 0) root = root.substr(0, root.size() - 4);
+
+	std::printf("\n-- real device output --\n");
+	{
+		const DeviceList list = Device::Enumerate();
+		std::printf("  devices with output channels: %zu\n", list.devices.size());
+		for (size_t i = 0; i < list.devices.size(); i++)
+			std::printf("    [%zu]%s %-28s %d ch  %.0f Hz\n", i,
+			            (int)i == list.defaultIndex ? " *" : "  ", list.devices[i].name.c_str(),
+			            list.devices[i].outputChannels, list.devices[i].sampleRate);
+		if (list.devices.empty())
+			Skip("device: enumeration finds an output", "none reported");
+		else
+			Pass("device: enumeration finds an output", std::to_string(list.devices.size()) + " device(s)");
+
+		const DeviceTarget target = Device::QueryDefault();
+		if (!target.available) {
+			// A headless box is a legitimate place to run this: say why, stay green.
+			Skip("device: open default output", target.reason);
+		} else {
+			std::printf("  default: %s  %.0f Hz  %d ch  buffer %d frames\n", target.name.c_str(),
+			            target.sampleRate, target.channels, target.bufferFrames);
+			Engine engine;
+			Engine::Config cfg;
+			cfg.assetRoot = root;
+			cfg.sampleRate = (int)target.sampleRate; // mixer runs at the device rate
+			std::string error;
+			if (!engine.Open(cfg, &error)) {
+				Fail("device: engine opens at device rate", error);
+			} else {
+				const bool played = moon.empty() ? false : engine.PlayBgm("moon", true, 0);
+				Device device;
+				std::string reason;
+				if (!device.Open(&engine, target, &reason)) {
+					Skip("device: open default output", reason);
+				} else if (!device.Start(&reason)) {
+					Fail("device: start", reason);
+				} else {
+					Pass("device: open default output",
+					     target.name + " @ " + std::to_string((int)target.sampleRate) + " Hz, buffer " +
+					         std::to_string(device.BufferFrames()) + " frames");
+					// Let it run on real hardware.
+					std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+					device.RefreshStats();
+					const CallbackStats st = device.Stats();
+					const double periodMs = 1000.0 * (double)device.BufferFrames() / target.sampleRate;
+					char detail[320];
+					std::snprintf(detail, sizeof detail,
+					              "%llu callbacks, %llu frames, interval p50 %.2f ms p99 %.2f ms max %.2f ms "
+					              "(jitter %.3f ms), underruns %llu",
+					              (unsigned long long)st.callbacks, (unsigned long long)st.frames, st.intervalP50Ms,
+					              st.intervalP99Ms, st.intervalMaxMs, st.intervalJitterMs,
+					              (unsigned long long)st.underruns);
+					Check(st.callbacks > 0, "device: callback fired on real hardware", detail);
+					std::snprintf(detail, sizeof detail, "work p50 %.1f us, p99 %.1f us, max %.1f us (period %.2f ms)",
+					              st.workP50Us, st.workP99Us, st.workMaxUs, periodMs);
+					Check(st.workP99Us < periodMs * 1000.0 * 0.5,
+					      "device: mix work uses under half the callback period", detail);
+					Check(!breakIt ? st.underruns == 0 : st.underruns > 0,
+					      "device: no underruns while playing", std::to_string((long long)st.underruns));
+					Check(st.frames > 0 && played, "device: audio was actually fed to the device", "");
+					device.Stop();
+					device.Close();
+				}
+				engine.Shutdown();
+			}
+		}
+	}
+
+	std::printf("\n-- realtime safety --\n");
+	{
+		// The real callback cannot audit itself without allocating, so run the same
+		// mix body on a normal thread and count heap blocks across the call.
+		if (moon.empty()) {
+			Skip("rt: mixer allocates nothing", "moon.ogg missing");
+		} else {
+			Engine engine;
+			Engine::Config cfg;
+			cfg.assetRoot = root;
+			cfg.sampleRate = 44100;
+			std::string error;
+			engine.Open(cfg, &error);
+			engine.PlayBgm("moon", true, 0);
+			WaitForMix(engine, 512);
+			int worstIteration = -1;
+			const int64_t worst = Device::AuditMixerAllocations(&engine, 512, 400, &worstIteration);
+			char detail[160];
+			std::snprintf(detail, sizeof detail, "%lld heap blocks allocated over 400 Mix() calls", (long long)worst);
+			Check(worst == 0, "rt: mixer allocates nothing", detail);
+			engine.Shutdown();
+		}
+	}
+
+	std::printf("\n-- mixing behaviour --\n");
+
+	// (A) Loop seam: the engine must not add a discontinuity of its own.  The
+	// seam jump of the output has to equal the source's own jump between the
+	// loop point and the last frame before it.
+	if (!moon.empty()) {
+		std::string error;
+		Stream::Config cfg;
+		cfg.engineRate = 44100;
+		auto stream = Stream::Open(moon, cfg, &error);
+		if (stream) {
+			const int rate = 44100;
+			LoopPlan plan;
+			plan.frames = stream->Info().frames;
+			plan.introEnd = 10 * rate;
+			plan.loopStart = 10 * rate;
+			plan.loopEnd = 20 * rate;
+			plan.looping = true;
+			stream->Start(plan);
+			std::vector<float> out;
+			RenderStream(*stream, 21.0, rate, &out);
+			// The seam lands exactly at t = 20 s in the output.
+			const int seamFrame = 20 * rate;
+			const double jumpOut = std::fabs((double)out[(size_t)seamFrame * 2] - (double)out[(size_t)(seamFrame - 1) * 2]);
+			// The material's own jump: last frame of the loop body vs the loop point.
+			// Decoded sequentially on purpose - seeking to a frame lands on a packet
+			// boundary (measured +896 frames) and would read the wrong sample.
+			std::string err2;
+			auto ref = Source::Open(moon, &err2);
+			std::vector<float> decoded((size_t)(20 * rate) * 2, 0.0f);
+			const int64_t have = ref ? ref->Read(decoded.data(), 20 * rate) : 0;
+			const double jumpSource =
+			    have >= 20 * rate ? std::fabs((double)decoded[(size_t)(10 * rate) * 2] -
+			                                  (double)decoded[(size_t)(20 * rate - 1) * 2])
+			                      : -1.0;
+			char detail[220];
+			std::snprintf(detail, sizeof detail, "output jump %.4f vs material's own jump %.4f",
+			              jumpOut, jumpSource);
+			// Not "below 0.05" on arbitrary material - that would be cherry picking.
+			// What the engine owes is that it adds nothing of its own.
+			Check(std::fabs(jumpOut - jumpSource) < 1e-4, "loop: seam jump is the material's own, not a glitch", detail);
+			Check(MaxAdjacentJump(out) < 0.2, "loop: no large click anywhere in 21 s of looping output",
+			      std::to_string(MaxAdjacentJump(out)));
+		}
+	}
+
+	// (B) Eight concurrent effects must not clip.
+	{
+		const std::string dir = "/tmp/artemis_audio_bank";
+		std::system(("mkdir -p " + dir).c_str());
+		// The real BGM goes beside the synthesised effects so a single asset root
+		// can produce the "BGM + 8 effects" case.  Copy only; the game data is
+		// read-only.
+		if (!moon.empty()) std::system(("cp -f \"" + moon + "\" \"" + dir + "/moon.ogg\"").c_str());
+		bool bank = true;
+		for (int i = 0; i < 8; i++)
+			bank = bank && MakeTone(dir + "/se" + std::to_string(i) + ".ogg", 1.2, 440.0);
+		if (!bank) {
+			Skip("mix: eight concurrent effects", "ffmpeg could not synthesise a test bank");
+		} else {
+			Engine engine;
+			Engine::Config cfg;
+			cfg.assetRoot = dir;
+			cfg.sampleRate = 44100;
+			std::string error;
+			engine.Open(cfg, &error);
+			engine.SetVolume(Engine::GroupSe, 1.0f);
+			int started = 0;
+			for (int i = 0; i < 8; i++)
+				if (engine.PlaySe("se" + std::to_string(i), i)) started++;
+			std::vector<float> out;
+			RenderEngine(engine, 44100 / 2, &out);
+			double peak = 0.0;
+			int64_t atFullScale = 0;
+			for (float v : out) {
+				const double a = std::fabs((double)v);
+				if (a > peak) peak = a;
+				if (a >= 0.9999) atFullScale++;
+			}
+			char detail[240];
+			std::snprintf(detail, sizeof detail, "%d effects, peak %.4f, %lld samples at full scale",
+			              started, peak, (long long)atFullScale);
+			Check(started == 8, "mix: eight effects started concurrently", detail);
+			Check(peak <= 1.0, "mix: output never exceeds full scale", detail);
+			// A hard clipper would leave a flat top at exactly 1.0; the soft limiter
+			// never reaches it.  This is what distinguishes limiting from clipping.
+			Check(atFullScale == 0, "mix: no flat-topped clipping", detail);
+			Check(peak > kLimiterKnee, "mix: limiter actually engaged on the pile-up", detail);
+
+			// The limiter must be transparent below the knee.
+			bool linear = true;
+			for (float x = -kLimiterKnee; x <= kLimiterKnee; x += 0.01f)
+				if (SoftLimit(x) != x) linear = false;
+			Check(linear, "mix: limiter is bit transparent below the knee", "");
+			Check(std::fabs(SoftLimit(8.0f)) < 1.0f && std::fabs(SoftLimit(-8.0f)) < 1.0f,
+			      "mix: limiter bounds even absurd input", "");
+			engine.Shutdown();
+		}
+	}
+
+	// (C) Crossfade, sample by sample: the outgoing track has to keep sounding
+	// while it fades, so there is no hole in the middle.
+	if (!moon.empty() && !niji.empty()) {
+		Engine engine;
+		Engine::Config cfg;
+		cfg.assetRoot = root;
+		cfg.sampleRate = 44100;
+		std::string error;
+		engine.Open(cfg, &error);
+		// Headroom so the two tracks sum linearly and the limiter stays out of it.
+		engine.SetVolume(Engine::GroupBgm, 0.35f);
+
+		std::vector<float> before, during;
+		engine.PlayBgm("moon", true, 0);
+		RenderEngine(engine, 44100, &before);
+		const bool switched = engine.PlayBgm("niji", true, 1000);
+		const int streamsDuringFade = engine.ActiveStreams();
+		RenderEngine(engine, 44100 * 2, &during);
+
+		// niji alone, with the same 1 s fade-in, so subtracting it leaves exactly the
+		// outgoing track's tail.
+		Engine solo;
+		solo.Open(cfg, &error);
+		solo.SetVolume(Engine::GroupBgm, 0.35f);
+		solo.PlayBgm("niji", true, 1000);
+		std::vector<float> reference;
+		RenderEngine(solo, 44100 * 2, &reference);
+
+		// After two seconds the outgoing track must have gone and released its slot.
+		const int streamsAfterFade = engine.ActiveStreams();
+
+
+		const int rate = 44100;
+		const double rmsBefore = WindowRms(before, 0, rate);
+		const double rmsSolo = WindowRms(reference, 0, rate);
+		const double quietest = std::min(WindowRms(during, 0, rate / 8), WindowRms(during, rate - rate / 8, rate / 8));
+		char detail[300];
+		Check(switched, "crossfade: second BGM starts", "");
+		Check(streamsDuringFade == 2, "crossfade: outgoing track keeps its own slot",
+		      std::to_string(streamsDuringFade) + " streams during the fade");
+		Check(streamsAfterFade == 1, "crossfade: slot is released once silent",
+		      std::to_string(streamsAfterFade) + " streams afterwards");
+		std::snprintf(detail, sizeof detail, "quietest window rms %.5f vs tracks %.5f / %.5f", quietest, rmsBefore,
+		              rmsSolo);
+		Check(quietest > 0.25 * std::min(rmsBefore, rmsSolo), "crossfade: no hole mid-fade (both tracks overlap)",
+		      detail);
+
+		// The envelope itself, measured window by window.  Two streams of the same
+		// file are advanced in lockstep; one fades, the other does not, so the ratio
+		// of their energies IS the gain curve.  This is the sample-accurate
+		// statement "the old track fades to silence and the new one fades up".
+		{
+			Stream::Config sc;
+			sc.engineRate = 44100;
+			std::string err3;
+			auto fadeOut = Stream::Open(moon, sc, &err3);
+			auto steadyOut = Stream::Open(moon, sc, &err3);
+			auto fadeIn = Stream::Open(moon, sc, &err3);
+			auto steadyIn = Stream::Open(moon, sc, &err3);
+			if (fadeOut && steadyOut && fadeIn && steadyIn) {
+				LoopPlan lp = LoopPlan::Whole(fadeOut->Info().frames);
+				fadeOut->Start(lp);
+				steadyOut->Start(lp);
+				fadeIn->Start(lp);
+				steadyIn->Start(lp);
+				std::vector<float> discard;
+				RenderStream(*fadeOut, 0.25, rate, &discard);
+				RenderStream(*steadyOut, 0.25, rate, &discard);
+				RenderStream(*fadeIn, 0.25, rate, &discard);
+				RenderStream(*steadyIn, 0.25, rate, &discard);
+
+				fadeOut->FadeFromTo(1.0f, 0.0f, 500);
+				fadeIn->FadeFromTo(0.0f, 1.0f, 500);
+				std::vector<float> outFading, outSteady, inFading, inSteady;
+				RenderStream(*fadeOut, 0.5, rate, &outFading);
+				RenderStream(*steadyOut, 0.5, rate, &outSteady);
+				RenderStream(*fadeIn, 0.5, rate, &inFading);
+				RenderStream(*steadyIn, 0.5, rate, &inSteady);
+
+				const int span = (int)(outFading.size() / 2);
+				const int windows = 8;
+				const int win = span / windows;
+				double down[8], up[8];
+				for (int k = 0; k < windows; k++) {
+					const double ref = WindowRms(outSteady, k * win, win);
+					const double got = WindowRms(outFading, k * win, win);
+					down[k] = ref > 1e-9 ? got / ref : 0.0;
+					const double refIn = WindowRms(inSteady, k * win, win);
+					const double gotIn = WindowRms(inFading, k * win, win);
+					up[k] = refIn > 1e-9 ? gotIn / refIn : 0.0;
+				}
+				bool monotoneDown = true, monotoneUp = true;
+				for (int k = 1; k < windows; k++) {
+					if (down[k] > down[k - 1] + 0.08) monotoneDown = false;
+					if (up[k] < up[k - 1] - 0.08) monotoneUp = false;
+				}
+				std::snprintf(detail, sizeof detail, "gain %.2f -> %.2f over 500 ms, 8 windows", down[0], down[7]);
+				Check(monotoneDown && down[0] > 0.6 && down[7] < 0.15,
+				      "crossfade: outgoing gain curve falls to silence", detail);
+				std::snprintf(detail, sizeof detail, "gain %.2f -> %.2f over 500 ms, 8 windows", up[0], up[7]);
+				Check(monotoneUp && up[0] < 0.25 && up[7] > 0.75, "crossfade: incoming gain curve rises from silence",
+				      detail);
+			}
+		}
+		engine.Shutdown();
+		solo.Shutdown();
+	}
+
+	// (D) Group volumes are independent.
+	if (!moon.empty()) {
+		Engine engine;
+		Engine::Config cfg;
+		cfg.assetRoot = root;
+		cfg.sampleRate = 44100;
+		std::string error;
+		engine.Open(cfg, &error);
+		engine.PlayBgm("moon", true, 0);
+		WaitForMix(engine, 512);
+		engine.SetVolume(Engine::GroupSe, 0.0f);
+		std::vector<float> out;
+		RenderEngine(engine, 44100 * 2, &out);
+		// Second second, not the first: moon.ogg fades in from near silence.
+		const double rmsWithSeMuted = WindowRms(out, 44100, 44100);
+		Check(rmsWithSeMuted > 0.001, "volume: muting the SE group does not touch BGM",
+		      std::to_string(rmsWithSeMuted));
+		Check(engine.Volume(Engine::GroupSe) == 0.0f && engine.Volume(Engine::GroupBgm) == 1.0f,
+		      "volume: groups hold independent values", "");
+		engine.Shutdown();
+	}
+
+	std::printf("\n-- boundary cases --\n");
+	{
+		// Ultra-short clip: generated, because none of the shipped effects is
+		// shorter than a second.
+		const std::string tiny = "/tmp/artemis_audio_tiny.ogg";
+		if (!MakeTone(tiny, 0.06, 880.0)) {
+			Skip("edge: clip shorter than 100 ms", "ffmpeg unavailable");
+		} else {
+			std::string error;
+			auto source = Source::Open(tiny, &error);
+			Check(source != nullptr, "edge: open a 60 ms clip", error);
+			if (source) {
+				const TrackInfo& info = source->Info();
+				Check(info.frames > 0 && info.Seconds() < 0.1, "edge: 60 ms clip reports a sub-100 ms duration",
+				      FormatSeconds(info.Seconds()));
+				for (bool loop : {false, true}) {
+					Stream::Config c;
+					c.engineRate = 44100;
+					auto stream = Stream::Open(tiny, c, &error);
+					LoopPlan plan = LoopPlan::Whole(info.frames);
+					plan.looping = loop;
+					stream->Start(plan);
+					std::vector<float> out;
+					RenderStream(*stream, 0.5, 44100, &out);
+					const double rms = WindowRms(out, 0, (int)(out.size() / 2));
+					char detail[200];
+					std::snprintf(detail, sizeof detail, "%s: rms %.5f over 500 ms of output",
+					              loop ? "looping" : "one shot", rms);
+					Check(rms > 0.001, loop ? "edge: sub-100 ms clip loops without falling silent"
+					                       : "edge: sub-100 ms clip plays as a one shot",
+					      detail);
+				}
+			}
+		}
+	}
+
+	// Mono -> stereo: the same sample must appear on both channels, exactly.
+	if (!mono.empty()) {
+		std::string error;
+		auto source = Source::Open(mono, &error);
+		Check(source && source->Info().channels == 1, "edge: real effect is mono",
+		      source ? std::to_string(source->Info().channels) + " ch" : error);
+		Stream::Config c;
+		c.engineRate = 44100;
+		auto stream = Stream::Open(mono, c, &error);
+		if (stream) {
+			LoopPlan once = LoopPlan::Whole(stream->Info().frames);
+			once.looping = false;
+			stream->Start(once);
+			std::vector<float> out;
+			RenderStream(*stream, 0.5, 44100, &out);
+			double worst = 0.0;
+			for (size_t i = 0; i < out.size(); i += 2) worst = std::max(worst, std::fabs((double)out[i] - out[i + 1]));
+			Check(worst == 0.0, "edge: mono is upmixed to identical channels", std::to_string(worst));
+			const double monoRms = WindowRms(out, 0, (int)(out.size() / 2));
+			Check(monoRms > 0.001, "edge: mono upmix is audible", std::to_string(monoRms));
+		}
+	}
+
+	// 48 kHz effect into a 44.1 kHz mixer: duration must be preserved.
+	if (!kisya.empty()) {
+		std::string error;
+		auto source = Source::Open(kisya, &error);
+		Check(source && source->Info().sampleRate == 48000, "edge: real effect is 48 kHz",
+		      source ? std::to_string(source->Info().sampleRate) + " Hz" : error);
+	}
+
+	// .sli loop point at the very start and at the very end.
+	{
+		const int64_t frames = 44100 * 3;
+		SliInfo atStart;
+		atStart.version = "2.00";
+		atStart.labels.push_back({0, "zero"});
+		atStart.unit = SliUnit::Samples;
+		LoopPlan p0 = LoopPlan::FromSli(atStart, frames, 44100);
+		Check(p0.loopStart == 0 && p0.loopEnd == frames && p0.looping,
+		      "edge: loop point 0 loops the whole file", std::to_string((long long)p0.loopStart));
+
+		SliInfo atEnd;
+		atEnd.version = "2.00";
+		atEnd.labels.push_back({frames, "end"});
+		atEnd.unit = SliUnit::Samples;
+		LoopPlan pe = LoopPlan::FromSli(atEnd, frames, 44100);
+		Check(pe.loopStart == 0 && pe.loopEnd == frames,
+		      "edge: loop point at the end degrades to whole-file loop", "");
+
+		SliInfo past;
+		past.version = "2.00";
+		past.labels.push_back({frames * 4, "past"});
+		past.unit = SliUnit::Samples;
+		LoopPlan pp = LoopPlan::FromSli(past, frames, 44100);
+		Check(pp.loopStart >= 0 && pp.loopEnd == frames && pp.loopEnd > pp.loopStart,
+		      "edge: loop point past the end is clamped safely", "");
+	}
+
+	// (multi-label .sli covered by the shipped fixture earlier; here check the
+	// rule directly on a synthetic three-label file)
+	{
+		SliInfo multi;
+		multi.version = "2.00";
+		multi.labels.push_back({44100, "one"});
+		multi.labels.push_back({88200, "two"});
+		multi.labels.push_back({132300, "three"});
+		multi.unit = SliUnit::Samples;
+		LoopPlan p = LoopPlan::FromSli(multi, 44100 * 10, 44100);
+		Check(p.loopStart == 132300, "edge: multiple labels take the last one",
+		      std::to_string((long long)p.loopStart));
+	}
+
+	// Damaged files must be refused, not crash the process.
+	{
+		bool refused = true;
+		for (int variant = 0; variant < 3; variant++) {
+			const std::string path = "/tmp/artemis_audio_broken" + std::to_string(variant) + ".ogg";
+			std::FILE* out = std::fopen(path.c_str(), "wb");
+			if (!out) {
+				refused = false;
+				break;
+			}
+			if (variant == 0) {
+				const char junk[] = "not an ogg file at all, just bytes";
+				std::fwrite(junk, 1, sizeof junk, out);
+			} else if (variant == 1) {
+				// A real Ogg page header with nothing behind it.
+				const unsigned char head[] = {'O', 'g', 'g', 'S', 0, 2, 0, 0, 0, 0, 0, 0, 0, 0};
+				std::fwrite(head, 1, sizeof head, out);
+			} else if (!moon.empty()) {
+				// A truncated real file: 200 bytes of a 3.4 MB track.
+				std::FILE* in = std::fopen(moon.c_str(), "rb");
+				char buf[200];
+				const size_t n = in ? std::fread(buf, 1, sizeof buf, in) : 0;
+				if (in) std::fclose(in);
+				std::fwrite(buf, 1, n, out);
+			}
+			std::fclose(out);
+
+			std::string error;
+			auto source = Source::Open(path, &error);
+			if (source) {
+				// Opening may succeed if the header survived; decoding must then
+				// return nothing rather than garbage or a crash.
+				std::vector<float> probe((size_t)1024 * 2);
+				const int64_t got = source->Read(probe.data(), 1024);
+				if (got > 512) refused = false;
+			}
+		}
+		Check(refused, "edge: damaged ogg files are refused without crashing", "3 variants");
+	}
+
+	std::printf("\n-- performance and resources --\n");
+	{
+		if (moon.empty()) {
+			Skip("perf: callback timing distribution", "moon.ogg missing");
+		} else {
+			Engine engine;
+			Engine::Config cfg;
+			cfg.assetRoot = root;
+			cfg.sampleRate = 44100;
+			std::string error;
+			engine.Open(cfg, &error);
+			engine.PlayBgm("moon", true, 0);
+			WaitForMix(engine, 512);
+
+			const int64_t rssBefore = ResidentBytes();
+			std::vector<float> block(512 * 2, 0.0f);
+			std::vector<double> workUs;
+			workUs.reserve(4000);
+			const double t0 = NowSeconds();
+			for (int i = 0; i < 4000; i++) {
+				WaitForMix(engine, 512);
+				const double a = NowSeconds();
+				engine.Mix(block.data(), 512);
+				workUs.push_back((NowSeconds() - a) * 1e6);
+			}
+			const double elapsed = NowSeconds() - t0;
+			const int64_t rssAfter = ResidentBytes();
+			const double audioSeconds = (double)(4000 * 512) / 44100.0;
+			const double periodMs = 1000.0 * 512.0 / 44100.0;
+			char detail[320];
+			std::snprintf(detail, sizeof detail,
+			              "p50 %.1f us, p99 %.1f us, max %.1f us for a %.2f ms period (%.0fx realtime)",
+			              PercentileOf(workUs, 0.50), PercentileOf(workUs, 0.99), PercentileOf(workUs, 1.0),
+			              periodMs, audioSeconds / elapsed);
+			Check(PercentileOf(workUs, 0.99) < periodMs * 1000.0 * 0.5,
+			      "perf: mix callback p99 well inside the period", detail);
+			std::snprintf(detail, sizeof detail, "%s before, %s after %.2f s of mixing", HumanBytes(rssBefore).c_str(),
+			              HumanBytes(rssAfter).c_str(), audioSeconds);
+			Check(rssAfter - rssBefore < 4 * 1024 * 1024, "perf: resident memory stays flat", detail);
+			engine.Shutdown();
+		}
+
+		// Eight effects plus BGM: how much CPU does that cost?
+		const std::string dir = "/tmp/artemis_audio_bank";
+		if (!FilePresent(dir + "/se7.ogg")) {
+			Skip("perf: eight effects CPU", "test bank missing");
+		} else {
+			Engine engine;
+			Engine::Config cfg;
+			cfg.assetRoot = dir; // holds the real moon.ogg plus se0..se7
+			cfg.sampleRate = 44100;
+			std::string error;
+			engine.Open(cfg, &error);
+			if (!moon.empty()) engine.PlayBgm("moon", true, 0);
+			int started = 0;
+			for (int i = 0; i < 8; i++)
+				if (engine.PlaySe("se" + std::to_string(i), i)) started++;
+			if (started < 8) {
+				Skip("perf: eight effects CPU", std::to_string(started) + " effects could not start");
+			} else {
+				const int frames = 44100 * 4;
+				const double t0 = NowSeconds();
+				std::vector<float> out;
+				RenderEngine(engine, frames, &out);
+				const double elapsed = NowSeconds() - t0;
+				const double audioSeconds = (double)frames / 44100.0;
+				char detail[200];
+				std::snprintf(detail, sizeof detail, "%d effects + BGM rendered %.1f s of audio in %.3f s (%.0fx realtime)",
+				              started, audioSeconds, elapsed, audioSeconds / elapsed);
+				Check(audioSeconds / elapsed > 20.0, "perf: nine concurrent streams still far faster than realtime",
+				      detail);
+				engine.Shutdown();
+			}
+		}
+	}
+
+	return 0;
 }
 
 int main(int argc, char** argv) {
@@ -850,6 +1568,8 @@ int main(int argc, char** argv) {
 		             "  sli   <file.sli> [--ogg <file.ogg>]\n"
 		             "  sli-batch <dir>\n"
 		             "  play  <file.ogg> [--loop] [--seconds N] [--se NAME]\n"
+		             "  devices\n"
+		             "  device <file.ogg> [--loop] [--seconds N] [--se NAME]\n"
 		             "  selftest [--data <dir>]\n");
 		return 2;
 	}
@@ -871,6 +1591,7 @@ int main(int argc, char** argv) {
 	}
 
 	if (command == "selftest") return RunSelfTest(dataDir);
+	if (command == "devices") return CommandDevices();
 
 	std::string target;
 	for (int i = 2; i < argc; i++) {
@@ -893,6 +1614,7 @@ int main(int argc, char** argv) {
 	if (command == "sli") return CommandSli(target, ogg, givenFrames, givenRate);
 	if (command == "sli-batch") return CommandSliBatch(target);
 	if (command == "play") return CommandPlay(target, loop, seconds > 0 ? seconds : 3.0, se);
+	if (command == "device") return CommandDevice(target, loop, seconds > 0 ? seconds : 3.0, se);
 	std::fprintf(stderr, "unknown command: %s\n", command.c_str());
 	return 2;
 }

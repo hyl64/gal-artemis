@@ -945,6 +945,44 @@ namespace artemis
 		return true;
 	}
 
+	bool Stage::LayerBox(const std::string& id, int& left, int& top, int& width, int& height) const
+	{
+		std::map<std::string, Layer>::const_iterator found = m_layers.find(id);
+		if(found == m_layers.end())
+			return false;
+		int ancestorLeft = 0, ancestorTop = 0;
+		AncestorOffsets(m_layers, found->second.id, ancestorLeft, ancestorTop);
+		left = found->second.left + ancestorLeft;
+		top = found->second.top + ancestorTop;
+		width = found->second.image.width;
+		height = found->second.image.height;
+		if(width <= 0 || height <= 0)
+		{
+			width = found->second.fillWidth;
+			height = found->second.fillHeight;
+		}
+		return width > 0 && height > 0;
+	}
+
+	bool Stage::LayerAlphaAt(const std::string& id, int x, int y, int& alpha) const
+	{
+		std::map<std::string, Layer>::const_iterator found = m_layers.find(id);
+		if(found == m_layers.end() || !found->second.hasImage)
+			return false;
+		const Layer& layer = found->second;
+		int ancestorLeft = 0, ancestorTop = 0;
+		AncestorOffsets(m_layers, layer.id, ancestorLeft, ancestorTop);
+		const int localX = x - (layer.left + ancestorLeft);
+		const int localY = y - (layer.top + ancestorTop);
+		if(localX < 0 || localY < 0 || localX >= layer.image.width || localY >= layer.image.height)
+			return false;
+		const size_t at = ((size_t)localY * layer.image.width + localX) * 4 + 3;
+		if(at >= layer.image.rgba.size())
+			return false;
+		alpha = layer.image.rgba[at];
+		return true;
+	}
+
 	bool Stage::SetProperty(const std::string& id, const std::string& key,
 		const std::string& value)
 	{

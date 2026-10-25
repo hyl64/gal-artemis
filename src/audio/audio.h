@@ -93,6 +93,19 @@ struct RenderStats {
 // |sample| below this counts as silence when reporting "was it silent".
 static constexpr float kSilenceFloor = 1.0f / 32768.0f;
 
+// Mix bus ceiling.  Eight sound effects plus a BGM track at full volume
+// overshoot 1.0, and clipping a summed mix produces the harshest artefact there
+// is.  The bus therefore runs through a soft limiter: linear below kLimiterKnee
+// so ordinary material is untouched, and asymptotic to 1.0 above it, so the
+// output can never exceed full scale and never sits flat-topped at +/-1.
+static constexpr float kLimiterKnee = 0.8f;
+// The ceiling is deliberately below 1.0: tanh saturates to exactly 1.0f for
+// large arguments, so limiting to 1.0 would still hand the device a full-scale
+// sample.  Staying just under leaves headroom and keeps "never at full scale"
+// true by construction.
+static constexpr float kLimiterCeiling = 0.995f;
+float SoftLimit(float sample);
+
 // ---------------------------------------------------------------------------
 // TrackInfo - what a container says about itself, without decoding audio.
 // ---------------------------------------------------------------------------
@@ -244,6 +257,9 @@ public:
 
 	// Fade: gain ramps to `target` over `ms`.  0 ms jumps immediately.
 	void FadeTo(float target, int ms);
+	// Ramp from an explicit starting gain.  Used for a fade-in from silence,
+	// where the stream's current gain is whatever the previous track left behind.
+	void FadeFromTo(float from, float to, int ms);
 	// Hard stop at the next Mix() call (drops the ring).
 	void Stop() { stopped_.store(true, std::memory_order_release); }
 	bool Stopped() const { return stopped_.load(std::memory_order_acquire); }
@@ -267,6 +283,7 @@ private:
 	// the mixer latches a request when it sees the counter move.
 	std::atomic<uint32_t> fadeGen_{0};
 	std::atomic<float> fadeTarget_{1.0f};
+	std::atomic<float> fadeFrom_{-1.0f}; // < 0 means "start from the current gain"
 	std::atomic<int> fadeMs_{0};
 };
 

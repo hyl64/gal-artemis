@@ -357,6 +357,12 @@ namespace artemis
 				throw std::runtime_error("pfs: entry runs past the index");
 			Entry e;
 			e.name.assign((const char*)d + cursor, nameLength);
+			// fold into the stored string itself: NormalizeName() would build a
+			// temporary and then copy it into the vector, which is three
+			// allocations per entry on the open path
+			e.normalized.assign(e.name);
+			for(char& ch : e.normalized)
+				ch = ch == '\\' ? '/' : (ch >= 'A' && ch <= 'Z' ? (char)(ch - 'A' + 'a') : ch);
 			cursor += nameLength + reserved;
 			e.offset = ReadU32(d, cursor);
 			e.size = ReadU32(d, cursor + 4);
@@ -364,7 +370,7 @@ namespace artemis
 			if(e.offset + e.size > length)
 				throw std::runtime_error("pfs: entry runs past the end of the file");
 			e.encrypted = false;
-			a.entries.push_back(e);
+			a.entries.push_back(std::move(e));
 		}
 
 		if(a.version == 4 || a.version == 5 || a.version == 8 || a.version == 9)
@@ -559,8 +565,18 @@ namespace artemis
 	{
 		const std::string want = NormalizeName(name);
 		for(const Entry& e : archive.entries)
+		{
+			// `normalized` is filled by the reader; an Entry built by hand still
+			// works by falling back to normalising here, so this cannot silently miss
+			if(!e.normalized.empty() || e.name.empty())
+			{
+				if(e.normalized == want)
+					return &e;
+				continue;
+			}
 			if(NormalizeName(e.name) == want)
 				return &e;
+		}
 		return nullptr;
 	}
 
@@ -570,7 +586,9 @@ namespace artemis
 		const std::string want = NormalizeName(suffix);
 		for(const Entry& e : archive.entries)
 		{
-			const std::string n = NormalizeName(e.name);
+			const std::string& n =
+				(!e.normalized.empty() || e.name.empty()) ? e.normalized
+					: NormalizeName(e.name);
 			if(n.size() >= want.size() && n.compare(n.size() - want.size(), want.size(), want) == 0)
 				out.push_back(&e);
 		}
@@ -646,6 +664,7 @@ namespace artemis
 				for(Entry e : archive.entries)
 				{
 					e.name = base + ":" + e.name;
+					e.normalized = NormalizeName(e.name); // renamed, so this is stale
 					all.push_back(e);
 				}
 			}

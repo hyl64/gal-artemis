@@ -939,6 +939,223 @@ namespace artemis
 		return Event();
 	}
 
+	// `[button id="60.1" base="forsystem/title/button" text="forsystem/title/start"
+	//          file="scenario/scene.iet" label="start" clickablethreshold="128"]`
+	//
+	// A button is two layers: the plate (`base`) on the id the script later moves
+	// with [lyprop], and the label (`text`) on `<id>.1`, which inherits the plate's
+	// position because the layer model nests by dotted id.  Both are the game's own
+	// images - nothing here invents a button.
+	Vm::Event Vm::DoButton(const Item& item)
+	{
+		ClickRegion region;
+		region.id = Value(item, "id");
+		region.file = Value(item, "file");
+		region.label = Value(item, "label");
+		region.call = IntValue(item, "call", 0) != 0;
+		region.threshold = IntValue(item, "clickablethreshold", 0);
+		if(region.id.empty())
+		{
+			Note("button without an id", item, false);
+			return Event();
+		}
+		if(m_config.stage != nullptr && m_config.assets != nullptr)
+		{
+			const std::string base = Value(item, "base");
+			const std::string text = Value(item, "text");
+			std::string error;
+			if(!base.empty())
+			{
+				m_stats.assetLoads++;
+				if(m_config.stage->SetLayerImage(region.id, base, *m_config.assets,
+					*m_config.cache, error))
+					region.hasImage = true;
+				else
+				{
+					m_stats.assetFailures++;
+					m_assetFailures.push_back(error);
+					Warn(error);
+				}
+			}
+			if(!text.empty())
+			{
+				m_stats.assetLoads++;
+				if(!m_config.stage->SetLayerImage(region.id + ".1", text, *m_config.assets,
+					*m_config.cache, error))
+				{
+					m_stats.assetFailures++;
+					m_assetFailures.push_back(error);
+					Warn(error);
+				}
+			}
+		}
+		m_regions.push_back(region);
+		return Event();
+	}
+
+	// `[point left="76" top="58" width="371" height="50" label="tanabata"]`
+	//
+	// The chapter screen's click rectangles: no image, just a rectangle and where it
+	// goes.  Kept in the same list as the buttons so the player has one hit-test.
+	Vm::Event Vm::DoPoint(const Item& item)
+	{
+		ClickRegion region;
+		region.left = IntValue(item, "left", 0);
+		region.top = IntValue(item, "top", 0);
+		region.width = IntValue(item, "width", 0);
+		region.height = IntValue(item, "height", 0);
+		region.label = Value(item, "label");
+		region.file = Value(item, "file");
+		region.id = item.Attr("id") != nullptr ? Value(item, "id") : std::string();
+		region.hasImage = false;
+		if(region.width <= 0 || region.height <= 0)
+		{
+			Note("point without a size", item, false);
+			return Event();
+		}
+		m_regions.push_back(region);
+		return Event();
+	}
+
+	namespace
+	{
+		// The words a choice shows for one label: the first text run after it, cut at
+		// the first line break.  A script that puts no text there gets its label name
+		// shown instead - the real title builds this string in Lua, and pretending
+		// otherwise would be inventing dialogue.
+		std::string FirstLineUnder(const IetScript& script, int labelIndex)
+		{
+			std::string out;
+			for(size_t i = (size_t)labelIndex + 1; i < script.items().size(); i++)
+			{
+				const Item& item = script.items()[i];
+				if(item.kind == Item::Kind::Label)
+					break;
+				if(item.kind != Item::Kind::Text)
+					continue;
+				out = StripInlineMarkup(item.text);
+				for(char& c : out)
+					if(c == '@')
+						c = '\n';
+				const size_t newline = out.find('\n');
+				if(newline != std::string::npos)
+					out = out.substr(0, newline);
+				while(!out.empty() && (out.back() == ' ' || out.back() == '\t'))
+					out.pop_back();
+				if(!out.empty())
+					return out;
+			}
+			return out;
+		}
+	}
+
+	// `[select file="d02_ik01_1" pre="route_c_01" cond="g.selecteachroute"]`
+	//
+	// The options are the labels of the named script that start with `pre`.  This is
+	// what the .ast corpus' select command says, read literally; the engine's own
+	// choice UI is Lua (`calllua function=select_*` in system_script.asb), which is
+	// reported as not modelled rather than guessed at.
+	Vm::Event Vm::DoSelect(const Item& item)
+	{
+		Event event;
+		const std::string file = Value(item, "file");
+		const std::string prefix = Value(item, "pre");
+		const std::string target = file.empty() ? NormalizePath(CurrentFile())
+			: NormalizePath(file);
+		std::string error;
+		if(!LoadScript(target, error))
+		{
+			event.kind = Event::Kind::Error;
+			event.error = error;
+			return event;
+		}
+		const IetScript* script = Script(target);
+		if(script == nullptr)
+		{
+			event.kind = Event::Kind::Error;
+			event.error = "select: cannot read " + target;
+			return event;
+		}
+		for(const std::string& label : script->labels())
+		{
+			if(!prefix.empty() && label.compare(0, prefix.size(), prefix) != 0)
+				continue;
+			Choice choice;
+			choice.label = label;
+			choice.text = FirstLineUnder(*script, script->LabelIndex(label));
+			if(choice.text.empty())
+				choice.text = label;
+			choice.line = item.line;
+			event.choices.push_back(choice);
+		}
+		if(event.choices.empty())
+		{
+			event.kind = Event::Kind::Error;
+			event.error = "select: " + target + " has no label starting with \"" + prefix +
+				"\"";
+			return event;
+		}
+		event.kind = Event::Kind::Select;
+		event.choiceFile = target;
+		m_lastChoices = event.choices;
+		m_lastChoiceFile = target;
+		m_stats.conditions++; // a choice is a branch the run took
+		return event;
+	}
+
+	bool Vm::ResolveChoice(int index, std::string& error)
+	{
+		error.clear();
+		if(index < 0 || index >= (int)m_lastChoices.size())
+		{
+			error = "no option " + std::to_string(index);
+			return false;
+		}
+		Jump(m_lastChoiceFile, m_lastChoices[index].label, error);
+		return error.empty();
+	}
+
+	bool Vm::RegionBox(int index, int& left, int& top, int& width, int& height) const
+	{
+		if(index < 0 || index >= (int)m_regions.size())
+			return false;
+		const ClickRegion& region = m_regions[index];
+		if(region.hasImage)
+		{
+			if(m_config.stage == nullptr)
+				return false;
+			// the rect comes from the stage: [lyprop] moved the plate after the button
+			// was declared, so the tag's own numbers would be stale
+			return m_config.stage->LayerBox(region.id, left, top, width, height);
+		}
+		left = region.left;
+		top = region.top;
+		width = region.width;
+		height = region.height;
+		return width > 0 && height > 0;
+	}
+
+	bool Vm::RegionHit(int index, int x, int y) const
+	{
+		if(index < 0 || index >= (int)m_regions.size())
+			return false;
+		int left = 0, top = 0, width = 0, height = 0;
+		if(!RegionBox(index, left, top, width, height))
+			return false;
+		if(x < left || y < top || x >= left + width || y >= top + height)
+			return false;
+		const ClickRegion& region = m_regions[index];
+		if(region.hasImage && region.threshold > 0 && m_config.stage != nullptr)
+		{
+			int alpha = 0;
+			// the plate's transparent corners are not part of the button
+			if(m_config.stage->LayerAlphaAt(region.id, x, y, alpha) &&
+				alpha < region.threshold)
+				return false;
+		}
+		return true;
+	}
+
 	Vm::Event Vm::DoTrans(const Item& item)
 	{
 		if(m_config.stage != nullptr)
@@ -1321,6 +1538,12 @@ namespace artemis
 			return DoLyColor(item);
 		if(name == "trans")
 			return DoTrans(item);
+		if(name == "button")
+			return DoButton(item);
+		if(name == "point")
+			return DoPoint(item);
+		if(name == "select")
+			return DoSelect(item);
 		if(name == "flip")
 			return event; // the double buffer is not modelled: the canvas is the frame
 

@@ -273,11 +273,19 @@ bool Engine::PlayBgmWithSli(const std::string& name, const std::string& sliText,
 		if (previous == stream.get()) previous = nullptr;
 	}
 
-	stream->FadeTo(volume, fadeMs);
 	{
 		std::lock_guard<std::mutex> lock(impl_->control);
 		stream->Start(plan);
 	}
+	// After Start(), not before: Start() latches the current fade generation, so
+	// a fade requested first would be swallowed and the track would appear at
+	// full volume (this was a real bug caught by the crossfade assertion).
+	// A fresh stream carries whatever gain the previous track left behind, so a
+	// fade-in has to state its starting point explicitly: silence.
+	if (fadeMs > 0)
+		stream->FadeFromTo(0.0f, volume, fadeMs);
+	else
+		stream->FadeTo(volume, 0);
 	impl_->bgmSlot = impl_->Publish(stream.get(), GroupBgm, volume);
 	currentBgm_ = name;
 
@@ -403,11 +411,19 @@ void Engine::Mix(float* out, int frames) {
 		Stream* s = impl_->active[i].load(std::memory_order_acquire);
 		if (s) s->Mix(out, frames);
 	}
-	// Hard clip: eight effects plus BGM at full volume can overshoot, and the
-	// device must never be handed out-of-range samples.
-	for (size_t i = 0; i < (size_t)frames * 2; i++)
-		out[i] = std::max(-1.0f, std::min(1.0f, out[i]));
+	// Soft limit rather than clip: see SoftLimit().  Ordinary mixes are below
+	// the knee and come through untouched; a pile-up of sound effects gets
+	// rounded off instead of flat-topped.
+	for (size_t i = 0; i < (size_t)frames * 2; i++) out[i] = SoftLimit(out[i]);
 	framesMixed_.fetch_add(frames, std::memory_order_relaxed);
+}
+
+float SoftLimit(float sample) {
+	const float magnitude = std::fabs(sample);
+	if (magnitude <= kLimiterKnee) return sample; // linear region: bit exact
+	const float over = (magnitude - kLimiterKnee) / (1.0f - kLimiterKnee);
+	const float limited = kLimiterKnee + (kLimiterCeiling - kLimiterKnee) * std::tanh(over);
+	return sample < 0.0f ? -limited : limited;
 }
 
 int Engine::BufferedFrames() const { return impl_ ? impl_->BufferedFrames() : 0; }

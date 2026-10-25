@@ -252,6 +252,13 @@ namespace artemis
 		// Read-only, and the reason it exists: a tween has to be *checked* where it
 		// landed, not only seen in a picture.
 		bool LayerProperty(const std::string& id, const std::string& key, int& value) const;
+		// Where a layer is drawn, ancestors included, and the image's size.  This is
+		// the rectangle a click has to land in, so it is the same arithmetic
+		// Composite() uses rather than a second copy of it.
+		bool LayerBox(const std::string& id, int& left, int& top, int& width, int& height) const;
+		// The plate's own alpha at a stage point: `clickablethreshold="128"` says a
+		// button is only clickable where it is actually opaque, and this is that test.
+		bool LayerAlphaAt(const std::string& id, int x, int y, int& alpha) const;
 		void DeleteLayer(const std::string& id);
 		bool HasLayer(const std::string& id) const;
 		bool LayerSize(const std::string& id, int& width, int& height) const;

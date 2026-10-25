@@ -43,13 +43,42 @@ namespace artemis
 			bool verbose = false;
 		};
 
+		// One option of a choice: the label a pick jumps to, and the words to put
+		// on screen for it.  `text` is the first line under that label when the
+		// script has one - the real title builds this text in Lua, which is not
+		// modelled, and a report says so.
+		struct Choice
+		{
+			std::string label;
+			std::string text;
+			int line = 0;
+		};
+
+		// A click region: the title screen's `[button]`s and the chapter screen's
+		// `[point]`s.  The interpreter owns the geometry because only it sees
+		// `[lyprop]`; the player hit-tests with it.
+		struct ClickRegion
+		{
+			std::string id;      // the layer the plate lives on ("60.1"), "" for [point]
+			int left = 0;
+			int top = 0;
+			int width = 0;
+			int height = 0;
+			std::string file;    // where a click goes
+			std::string label;
+			bool call = false;   // call= instead of jump=
+			int threshold = 0;   // clickablethreshold: minimum alpha to count
+			bool hasImage = false; // the plate's own pixels answer the alpha test
+		};
+
 		struct Event
 		{
 			enum class Kind
 			{
-				None, // keep going
-				Page, // a page of text is on screen: the driver draws it
-				Stop, // the script ended
+				None,   // keep going
+				Page,   // a page of text is on screen: the driver draws it
+				Stop,   // the script ended, or [stop] parked it (the title screen)
+				Select, // a choice is on screen: the player picks one
 				Error,
 			};
 			Kind kind = Kind::None;
@@ -58,6 +87,8 @@ namespace artemis
 			std::string text;
 			std::string speaker;
 			std::string error;
+			std::vector<Choice> choices; // Select only
+			std::string choiceFile;      // the script the options live in
 		};
 
 		struct Stats
@@ -137,6 +168,26 @@ namespace artemis
 			return m_ignoredLocations;
 		}
 		const std::map<std::string, std::string>& variables() const { return m_vars; }
+		const std::vector<ClickRegion>& clickRegions() const { return m_regions; }
+		// Jump to the option the player picked.  False when the index is not one
+		// the last Select event offered.
+		bool ResolveChoice(int index, std::string& error);
+		// Jump to a label, which is what a click on a [button] does.  The private
+		// Jump() is the same thing but takes no Item; this is the way a front end
+		// (which only has the region, not the tag) asks for it.
+		bool JumpTo(const std::string& file, const std::string& label, std::string& error)
+		{
+			Jump(file, label, error);
+			return error.empty();
+		}
+		// Whether a click on this region is a hit: the rect, and the plate's own
+		// alpha against clickablethreshold when the script set one.
+		bool RegionHit(int index, int x, int y) const;
+		// The rectangle a region covers on the stage, for hit-testing and for the
+		// report.  Image regions ask the stage (a [lyprop] may have moved the plate);
+		// [point] regions carry their own numbers.
+		bool RegionBox(int index, int& left, int& top, int& width, int& height) const;
+		const std::vector<Choice>& lastChoices() const { return m_lastChoices; }
 		std::vector<std::string> macroNames() const;
 		size_t macroCount() const { return m_macros.size(); }
 		std::vector<std::string> loadedScripts() const;
@@ -195,6 +246,9 @@ namespace artemis
 		Event DoLyDel(const Item& item);
 		Event DoLyColor(const Item& item);
 		Event DoTrans(const Item& item);
+		Event DoButton(const Item& item);
+		Event DoPoint(const Item& item);
+		Event DoSelect(const Item& item);
 		Event DoMacroAdd(const Item& item);
 		Event DoLua(const Item& item);
 
@@ -229,6 +283,10 @@ namespace artemis
 		int m_lastTextLine = 0;
 		std::string m_bootSummary;
 		TagSink* m_sink = nullptr;
+		std::vector<ClickRegion> m_regions;
+		std::vector<Choice> m_lastChoices;
+		std::string m_lastChoiceFile;
+		bool m_lastChoiceCall = false;
 		std::map<std::string, long long> m_frontEndTags;
 	};
 }

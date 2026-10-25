@@ -62,6 +62,14 @@ namespace artemis
 		uint64_t offset;  // where the content starts in the archive
 		uint32_t size;    // its length
 		bool encrypted;   // whether the writer encrypted it
+
+		// NormalizeName(name), computed once when the index is parsed.  Find() used
+		// to call NormalizeName() on every candidate it looked at, which allocates a
+		// string: a miss walked all 1682 names of a shipped volume and cost 71.5 us,
+		// against 0.3 us for a hit that stopped early.  Loading a game misses often
+		// ("is there a variant of this sprite?") so the miss is the number that
+		// matters.  Appended last, so `Entry{a, b, c, d}` still compiles.
+		std::string normalized;
 	};
 
 	// which key byte a file's first byte is XORed with
