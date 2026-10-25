@@ -229,18 +229,20 @@ Apple 的 clang 发行版不带 libFuzzer 运行库。所以改用**自写循环
 
 ---
 
-## 2. Status after the fixes (Lead, 2026-10-25 19:20)
+## 2. Status after the fixes (Lead, 2026-10-25 19:35)
 
-| # | state | what changed |
-|---|---|---|
-| F1 | **fixed** | `src/lua.cpp` refuses nesting past 200 levels with a line number. The three `ast-crash-*` inputs now print `unexpected token` and exit 0; the old ones took the process down with SIGSEGV at 128 KB of nested braces. |
-| F2 | **fixed** | `IntValue` in `src/ipt.cpp` rejects out-of-range canvas numbers instead of the int conversion being undefined. |
-| F3 | pending | `.iet` still accepts a 100 MB single line. |
-| F4a | pending | an entry name containing NUL is still accepted. |
-| F4b | pending | `..\\..\\x` in an entry name still escapes the output directory on extract. This is the one worth doing next: it writes outside the tree. |
-| F5 | pending | `entries.reserve(count)` still trusts a count from a 1 KiB file. |
-| - | **gone** | the `ast-timeout-2593` input no longer times out: 0.055 s now (the nesting limit removed the pathological path). |
+All five findings are now closed.  Each fix is in the layer that should own it,
+not at the call site, so every tool inherits it:
 
-Two of the five are fixed here rather than by a fuzz session's owner, because the
-session that found them had ended. The rest are recorded above with file:line so
-whoever picks them up does not have to rediscover them.
+| # | state | what changed | evidence |
+|---|---|---|---|
+| F1 | **fixed** | `src/lua.cpp`: refuses nesting past 200 levels, with a line number. | `ast-crash-0012.bin` → `unexpected token` exit 0 (was SIGSEGV at 128 KB of braces); the `ast-timeout-2593` input now runs in 55 ms |
+| F2 | **fixed** | `src/ipt.cpp`: `IntValue` refuses a double outside int's range instead of the conversion being undefined. | a canvas of `w=4294967296` → `not an IPT descriptor: composite IPT with no canvas size` |
+| F3 | **fixed** | `src/iet.cpp`: a source line longer than 1 MiB is refused before parsing. | an 8 MiB line → `line longer than 1 MiB: a script line is not this long` |
+| F4a | **fixed** | `src/pfs.cpp`: an entry name containing NUL is refused at parse time. | `pfs-error-success-0069.bin` → `entry name is not usable: \x00…` |
+| F4b | **fixed** | `src/pfs.cpp`: `NameIsSafe()` also refuses absolute paths and any `..` component, at parse time. | a crafted archive whose entry is `..\..\escape.txt` → refused, nothing written outside the directory |
+| F5 | **fixed** | `src/pfs.cpp`: `entries.reserve(count)` is capped at 4,096 instead of trusting a count read from a 1 KiB file. | the same input peaks at **5.5 MB** (was **243 MB**) |
+
+The general lesson worth keeping: four of the five were "the parser trusted a
+number the file wrote down".  A format reader's job is to be wrong loudly about
+nonsense, and the cheap way to be sure is to fuzz it with nonsense.

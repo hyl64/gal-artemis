@@ -185,6 +185,29 @@ namespace artemis
 				}
 			}
 
+			// A real script line is a few hundred bytes.  One hundred megabytes on a
+			// single line is not a script, and accepting it costs seconds and half a
+			// gigabyte before anything is drawn, so it is refused up front.
+			static constexpr size_t kMaxLineBytes = 1u << 20;
+
+			bool CheckLineLengths()
+			{
+				size_t start = 0;
+				for(size_t i = 0; i <= source.size(); i++)
+				{
+					if(i < source.size() && source[i] != '\n')
+						continue;
+					if(i - start > kMaxLineBytes)
+					{
+						line = 1;
+						error = "line longer than 1 MiB: a script line is not this long";
+						return false;
+					}
+					start = i + 1;
+				}
+				return true;
+			}
+
 			void Fail(const std::string& why)
 			{
 				if(failed)
@@ -435,6 +458,8 @@ namespace artemis
 	{
 		out = IetScript();
 		IetParser parser(utf8Source, out, error);
+		if(!parser.CheckLineLengths())
+			return false;
 		parser.Run();
 		if(parser.failed)
 			return false;

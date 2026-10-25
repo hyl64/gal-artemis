@@ -8,6 +8,7 @@
 #include "sniff.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <stdexcept>
 
@@ -323,72 +324,57 @@ namespace artemis
 			e.encrypted = archive.encrypted();
 	}
 
+	// A name from an archive is untrusted input: it can carry a NUL (which makes
+	// fopen silently truncate, so "readme.txt" becomes something else) or climb
+	// out of the extraction directory with "..".  Both are refused here rather
+	// than at each call site, so a game loader and a dump tool behave alike.
+	// For error messages: an unsafe name may hold a NUL or control bytes, so it
+	// is shown with those escaped rather than dropped.
+	static std::string PrintableName(const std::string& name)
+	{
+		std::string out;
+		for(size_t i = 0; i < name.size() && i < 80; i++)
+		{
+			const unsigned char c = (unsigned char)name[i];
+			if(c >= 0x20 && c < 0x7f)
+				out += (char)c;
+			else
+			{
+				char buf[8];
+				snprintf(buf, sizeof buf, "\\x%02x", c);
+				out += buf;
+			}
+		}
+		if(name.size() > 80)
+			out += "...";
+		return out;
+	}
+
+	bool NameIsSafe(const std::string& name)
+	{
+		if(name.empty() || name.find('\0') != std::string::npos)
+			return false;
+		// absolute paths and any ".." component
+		if(name[0] == '/' || name[0] == '\\')
+			return false;
+		size_t at = 0;
+		while(at <= name.size())
+		{
+			const size_t next = name.find_first_of("/\\", at);
+			const std::string part = name.substr(at, next == std::string::npos
+				? std::string::npos : next - at);
+			if(part == "..")
+				return false;
+			if(next == std::string::npos)
+				break;
+			at = next + 1;
+		}
+		return true;
+	}
+
+
 	static Archive Parse(const uint8_t* d, size_t length, const std::string& path,
-		KeyPhase want)
-	{
-		if(length < 0x0C)
-			throw std::runtime_error("pfs: too short to be an archive");
-		Archive a;
-		a.path = path;
-		a.magic.assign((const char*)d, 3);
-		if(a.magic[0] != 'p' || a.magic[1] != 'f' || a.magic[2] < '0' || a.magic[2] > '9')
-			throw std::runtime_error("pfs: not a 'pf<digit>' archive");
-		a.version = a.magic[2] - '0';
-		a.indexSize = ReadU32(d, 0x03);
-		if(INDEX_START + (size_t)a.indexSize > length)
-			throw std::runtime_error("pfs: index size runs past the end of the file");
-
-		const bool v2 = a.version == 2;
-		const uint32_t count = v2 ? ReadU32(d, 0x0B) : ReadU32(d, INDEX_START);
-		if(count > 4000000u)
-			throw std::runtime_error("pfs: implausible entry count");
-
-		size_t cursor = v2 ? 0x0F : 0x0B;
-		const size_t indexEnd = INDEX_START + a.indexSize;
-		const size_t reserved = v2 ? 12 : 4;
-		a.entries.reserve(count);
-		for(uint32_t i = 0; i < count; i++)
-		{
-			if(cursor + 4 > indexEnd)
-				throw std::runtime_error("pfs: index ends inside an entry");
-			const uint32_t nameLength = ReadU32(d, cursor);
-			cursor += 4;
-			if(nameLength > a.indexSize || cursor + nameLength + reserved + 8 > indexEnd)
-				throw std::runtime_error("pfs: entry runs past the index");
-			Entry e;
-			e.name.assign((const char*)d + cursor, nameLength);
-			// fold into the stored string itself: NormalizeName() would build a
-			// temporary and then copy it into the vector, which is three
-			// allocations per entry on the open path
-			e.normalized.assign(e.name);
-			for(char& ch : e.normalized)
-				ch = ch == '\\' ? '/' : (ch >= 'A' && ch <= 'Z' ? (char)(ch - 'A' + 'a') : ch);
-			cursor += nameLength + reserved;
-			e.offset = ReadU32(d, cursor);
-			e.size = ReadU32(d, cursor + 4);
-			cursor += 8;
-			if(e.offset + e.size > length)
-				throw std::runtime_error("pfs: entry runs past the end of the file");
-			e.encrypted = false;
-			a.entries.push_back(std::move(e));
-		}
-
-		if(a.version == 4 || a.version == 5 || a.version == 8 || a.version == 9)
-		{
-			uint8_t key[20];
-			Sha1(d + INDEX_START, a.indexSize, key);
-			a.key.assign(key, key + 20);
-		}
-		DetectPhase(d, length, a, want);
-		return a;
-	}
-
-	Archive Read(const std::vector<uint8_t>& data, KeyPhase phase)
-	{
-		Archive a = Parse(data.empty() ? nullptr : data.data(), data.size(), "", phase);
-		a.owner = std::make_shared<std::vector<uint8_t>>(data);
-		return a;
-	}
+		KeyPhase want);
 
 	Archive Open(const std::string& path, KeyPhase phase)
 	{
@@ -547,6 +533,80 @@ namespace artemis
 	}
 
 	// --------------------------------------------------------------- game paths
+
+
+	static Archive Parse(const uint8_t* d, size_t length, const std::string& path,
+		KeyPhase want)
+	{
+		if(length < 0x0C)
+			throw std::runtime_error("pfs: too short to be an archive");
+		Archive a;
+		a.path = path;
+		a.magic.assign((const char*)d, 3);
+		if(a.magic[0] != 'p' || a.magic[1] != 'f' || a.magic[2] < '0' || a.magic[2] > '9')
+			throw std::runtime_error("pfs: not a 'pf<digit>' archive");
+		a.version = a.magic[2] - '0';
+		a.indexSize = ReadU32(d, 0x03);
+		if(INDEX_START + (size_t)a.indexSize > length)
+			throw std::runtime_error("pfs: index size runs past the end of the file");
+
+		const bool v2 = a.version == 2;
+		const uint32_t count = v2 ? ReadU32(d, 0x0B) : ReadU32(d, INDEX_START);
+		if(count > 4000000u)
+			throw std::runtime_error("pfs: implausible entry count");
+
+		size_t cursor = v2 ? 0x0F : 0x0B;
+		const size_t indexEnd = INDEX_START + a.indexSize;
+		const size_t reserved = v2 ? 12 : 4;
+		// A 1 KiB file can claim four million entries, and reserving for that
+		// up front allocates 238 MiB before the first entry turns out to be
+		// nonsense.  Grow instead of trusting the count.
+		a.entries.reserve(count < 4096u ? count : 4096u);
+		for(uint32_t i = 0; i < count; i++)
+		{
+			if(cursor + 4 > indexEnd)
+				throw std::runtime_error("pfs: index ends inside an entry");
+			const uint32_t nameLength = ReadU32(d, cursor);
+			cursor += 4;
+			if(nameLength > a.indexSize || cursor + nameLength + reserved + 8 > indexEnd)
+				throw std::runtime_error("pfs: entry runs past the index");
+			Entry e;
+			e.name.assign((const char*)d + cursor, nameLength);
+			if(!NameIsSafe(e.name))
+				throw std::runtime_error("pfs: entry name is not usable: "
+					+ PrintableName(e.name));
+			// fold into the stored string itself: NormalizeName() would build a
+			// temporary and then copy it into the vector, which is three
+			// allocations per entry on the open path
+			e.normalized.assign(e.name);
+			for(char& ch : e.normalized)
+				ch = ch == '\\' ? '/' : (ch >= 'A' && ch <= 'Z' ? (char)(ch - 'A' + 'a') : ch);
+			cursor += nameLength + reserved;
+			e.offset = ReadU32(d, cursor);
+			e.size = ReadU32(d, cursor + 4);
+			cursor += 8;
+			if(e.offset + e.size > length)
+				throw std::runtime_error("pfs: entry runs past the end of the file");
+			e.encrypted = false;
+			a.entries.push_back(std::move(e));
+		}
+
+		if(a.version == 4 || a.version == 5 || a.version == 8 || a.version == 9)
+		{
+			uint8_t key[20];
+			Sha1(d + INDEX_START, a.indexSize, key);
+			a.key.assign(key, key + 20);
+		}
+		DetectPhase(d, length, a, want);
+		return a;
+	}
+
+	Archive Read(const std::vector<uint8_t>& data, KeyPhase phase)
+	{
+		Archive a = Parse(data.empty() ? nullptr : data.data(), data.size(), "", phase);
+		a.owner = std::make_shared<std::vector<uint8_t>>(data);
+		return a;
+	}
 
 	std::string NormalizeName(const std::string& name)
 	{

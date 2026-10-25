@@ -169,6 +169,9 @@ namespace artemis
 	// "root\image\a.png" -> "root/image/a.png", for comparing game paths
 	std::string NormalizeName(const std::string& name);
 
+	// Untrusted entry names: no NUL, no absolute path, no '..'.
+	bool NameIsSafe(const std::string& name);
+
 	// The entry whose name matches, ignoring case and slash direction.
 	const Entry* Find(const Archive& archive, const std::string& name);
 

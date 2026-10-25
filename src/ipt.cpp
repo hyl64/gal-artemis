@@ -39,11 +39,16 @@ namespace artemis
 		constexpr int kMaxCanvasDimension = 16384;
 		constexpr int64_t kMaxCanvasBytes = 512LL << 20; // 512 MiB of RGBA
 
+		// A canvas declared as 4294967296 must be refused, not silently wrapped:
+		// the conversion from a double outside int's range is undefined in C++.
 		bool IntValue(const LuaValue& value, int& out)
 		{
 			if(value.kind != LuaValue::Kind::Integer && value.kind != LuaValue::Kind::Number)
 				return false;
-			out = (int)value.asNumber;
+			const double v = value.asNumber;
+			if(!(v >= -2147483648.0 && v <= 2147483647.0))
+				return false;
+			out = (int)v;
 			return true;
 		}
 
