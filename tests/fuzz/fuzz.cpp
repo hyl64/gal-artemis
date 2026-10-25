@@ -1340,7 +1340,21 @@ namespace
 		return data;
 	}
 
-	int RunLimits(const std::string& corpus, const std::string& outDir)
+	// pf8 layout: magic(3) indexSize(4) count(4) entries...  The count sits at
+	// 0x07 here, unlike pf2 where it sits after the entries.
+	std::vector<uint8_t> BuildPf8Header(uint32_t indexSize, uint32_t count, size_t total)
+	{
+		std::vector<uint8_t> data = { 'p', 'f', '8' };
+		for(int i = 0; i < 4; i++)
+			data.push_back((uint8_t)((indexSize >> (8 * i)) & 0xFF));
+		for(int i = 0; i < 4; i++)
+			data.push_back((uint8_t)((count >> (8 * i)) & 0xFF));
+		while(data.size() < total)
+			data.push_back(0x41);
+		return data;
+	}
+
+	int RunLimits(const std::string& corpus, const std::string& outDir, int timeoutMs)
 	{
 		(void)corpus;
 		EnsureDirectory(outDir);
@@ -1422,6 +1436,12 @@ namespace
 			probes.push_back({ "asb", "item-count-1m-no-body", bytes, true });
 		}
 
+		// .pfs: an entry count the index cannot possibly hold.  The reader does check
+		// that (`entry runs past the index`), but it reserves the full count first:
+		// this probe measures what that costs for a 1 KiB file.
+		probes.push_back({ "pfs", "count-3.9m-small-index",
+			BuildPf8Header(16, 3900000, 1024), false });
+
 		// .pfs: an index that claims 4 GiB
 		probes.push_back({ "pfs", "index-size-4g", BuildPfsWithIndexSize(0xFFFFFFFFu, 1), true });
 		probes.push_back({ "pfs", "entry-count-4g", BuildPfsWithIndexSize(64, 0xFFFFFFFFu), true });
@@ -1431,8 +1451,8 @@ namespace
 		for(const Probe& probe : probes)
 		{
 			const Runner runner = RunnerFor(probe.parser);
-			const Result result = RunInChild(runner, probe.bytes, 4000, 512ull * 1024ull * 1024ull,
-				false);
+			const Result result = RunInChild(runner, probe.bytes, timeoutMs,
+				512ull * 1024ull * 1024ull, false);
 			const char* verdict = "?";
 			bool bad = false;
 			if(result.timedOut)
@@ -1555,8 +1575,10 @@ int main(int argc, char** argv)
 				corpus = argv[++i];
 			else if(arg == "--out" && i + 1 < argc)
 				outDir = argv[++i];
+			else if(arg == "--timeout" && i + 1 < argc)
+				timeoutMs = atoi(argv[++i]);
 		}
-		return RunLimits(corpus, outDir);
+		return RunLimits(corpus, outDir, timeoutMs);
 	}
 	if(command == "direct")
 	{

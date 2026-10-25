@@ -983,6 +983,21 @@ namespace artemis
 		return true;
 	}
 
+	void Stage::DeleteLayerTree(const std::string& id)
+	{
+		if(id.empty())
+			return;
+		DeleteLayer(id);
+		const std::string prefix = id + ".";
+		for(std::map<std::string, Layer>::iterator it = m_layers.begin(); it != m_layers.end();)
+		{
+			if(it->first.compare(0, prefix.size(), prefix) == 0)
+				it = m_layers.erase(it);
+			else
+				++it;
+		}
+	}
+
 	bool Stage::SetProperty(const std::string& id, const std::string& key,
 		const std::string& value)
 	{

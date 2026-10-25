@@ -917,8 +917,9 @@ namespace artemis
 		{
 			const size_t comma = id.find(',', at);
 			const std::string part = id.substr(at, comma == std::string::npos ? comma : comma - at);
+			// the group, not just the id: a title screen's buttons live on 60.1..60.7
 			if(!Trim(part).empty())
-				m_config.stage->DeleteLayer(Trim(part));
+				m_config.stage->DeleteLayerTree(Trim(part));
 			if(comma == std::string::npos)
 				break;
 			at = comma + 1;

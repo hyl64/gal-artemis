@@ -1,0 +1,17 @@
+== building (address+undefined sanitizers, sources fresh from /Users/huangyuliang/Documents/gal-engines/artemis/src)
+/Users/huangyuliang/Documents/gal-engines/artemis/src/asb.cpp:92:29: warning: missing field 'why' initializer [-Wmissing-field-initializers]
+   92 |                 Reader reader{ data, size };
+      |                                           ^
+1 warning generated.
+== fuzzing: 5000 inputs per parser, 2000 ms deadline, 512 MiB ceiling
+pfs: 9 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
+  peak 0 KiB on input 0 (19 bytes, truncate-tiny, seed built-pf6)
+  peak 0 KiB on input 1 (172 bytes, fill-ff, seed built-pf6)
+  peak 1 KiB on input 2 (232 bytes, open-brackets, seed built-pf2)
+  peak 1 KiB on input 4 (1767 bytes, repeat-line, seed built-pf8)
+  FINDING pfs-error-success-0007: an entry name contains a NUL (160 bytes, zero-range, seed built-pf2-v2)
+  peak 7 KiB on input 12 (524301 bytes, insert-noise, seed root)
+  peak 105 KiB on input 13 (262144 bytes, flip-bytes, seed HENPRI.pfs)
+  peak 1024 KiB on input 42 (159 bytes, half-sjis, seed built-pf2-v2)
+  peak 131072 KiB on input 112 (160 bytes, swap-ranges, seed built-pf2-v2)
+  FINDING pfs-error-success-0149: an entry name contains a NUL (172 bytes, swap-ranges, seed built-pf8)

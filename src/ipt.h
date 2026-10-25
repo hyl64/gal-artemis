@@ -138,6 +138,12 @@ namespace artemis
 		int tilesSkipped = 0;      // no intersection with the canvas
 		std::vector<std::string> missing; // tile resources that could not be read
 		std::vector<std::string> notes;
+		// Filled by whoever times the two halves.  Kept here so a benchmark can
+		// tell the compositor from the PNG encoder: on a real 1668x998 event CG the
+		// encode is three orders of magnitude larger, and a single number would
+		// blame the wrong half.
+		long long composeUs = 0;
+		long long encodeUs = 0;
 	};
 
 	// Assemble the canvas from a composite descriptor.  `directory` is where the

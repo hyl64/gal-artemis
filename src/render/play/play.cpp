@@ -628,8 +628,9 @@ namespace artemis
 					{
 						// the first page of the body, drawn and written: this is the
 						// "clicked start and the story began" evidence
-						host->SetPageText(host->Reveal(fullText, revealed ? revealMs : 0),
-							speaker);
+						// the whole page, not the first glyph: this picture is the
+						// "clicked start and the story began" evidence
+						host->SetPageText(host->Reveal(fullText, revealMs), speaker);
 						host->Compose(canvas, now);
 						std::string shotError;
 						if(!Shot(options.shotScene, shotError))

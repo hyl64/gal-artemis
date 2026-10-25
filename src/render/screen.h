@@ -260,6 +260,10 @@ namespace artemis
 		// button is only clickable where it is actually opaque, and this is that test.
 		bool LayerAlphaAt(const std::string& id, int x, int y, int& alpha) const;
 		void DeleteLayer(const std::string& id);
+		// `[lydel id="60"]` removes the *group* 60: the layer and every nested
+		// child ("60.1", "60.1.1").  A title screen's buttons are children like
+		// that, and deleting only the parent would leave them on the stage.
+		void DeleteLayerTree(const std::string& id);
 		bool HasLayer(const std::string& id) const;
 		bool LayerSize(const std::string& id, int& width, int& height) const;
 		size_t layerCount() const { return m_layers.size(); }

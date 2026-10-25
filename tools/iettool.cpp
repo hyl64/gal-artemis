@@ -24,6 +24,7 @@
 #include "../src/pngio.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -278,8 +279,20 @@ static bool DecodeComposite(const artemis::Ipt& ipt, const std::string& director
 {
 	unlink(outPath.c_str()); // never leave a previous run's image looking like success
 	artemis::Image canvas;
+	// Compose and encode are timed apart: on a real 1668x998 event CG the encode
+	// is hundreds of milliseconds and the compose is single digits, so a single
+	// number would blame the wrong half.
+	const auto composeStart = std::chrono::steady_clock::now();
 	if(!artemis::ComposeIpt(ipt, directory, read, canvas, report, error))
 		return false;
+	const long long composeUs = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - composeStart).count();
+	const auto encodeStart = std::chrono::steady_clock::now();
+	const auto encodeDone = [&] {
+		return std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - encodeStart).count();
+	};
+	(void)encodeDone;
 	if(!report.missing.empty())
 	{
 		error = std::to_string(report.missing.size()) + " referenced tile(s) are missing";
@@ -305,6 +318,8 @@ static bool DecodeComposite(const artemis::Ipt& ipt, const std::string& director
 			return false;
 	}
 	colors = (int)artemis::CountColors(canvas.rgba.data(), canvas.pixels());
+	report.composeUs = composeUs;
+	report.encodeUs = encodeDone();
 	return true;
 }
 
@@ -322,6 +337,9 @@ static int Decode(const artemis::Ipt& ipt, const std::string& directory,
 		printf(", %d skipped", report.tilesSkipped);
 	printf(", %d colour(s), %s\n", colors,
 		ipt.mode == "diff" ? "opaque (Bgr32)" : "alpha (Bgra32)");
+	// Self-reported split so a benchmark can tell the compositor from the encoder.
+	printf("  apply %.3f ms  (compose + blend + clip)\n", report.composeUs / 1000.0);
+	printf("  encode %.3f ms  (PNG write + colour count)\n", report.encodeUs / 1000.0);
 	if(!quiet)
 	{
 		for(const std::string& note : report.notes)
