@@ -544,12 +544,14 @@ namespace
 		std::string shotTitle;
 		std::string shotScene;
 		std::string shotDir;
+		std::string extraDir;       // --extra-dir: another root to resolve assets from
 		int quitAfterPages = 0;
 		// audio and effects: opt-in, so the still-frame baseline stays exactly
 		// what it was
 		std::string audioCapture;   // --audio-capture <file.wav>
 		double audioSeconds = 8.0;  // --audio-seconds N
 		bool audio = false;         // --audio: wire the tags, no WAV
+		bool noAudio = false;       // --no-audio: the interactive window stays silent
 		bool fx = false;            // --fx: wire the effect tags
 		double fxAt = -1;           // --fx-at: sample the effects at this offset
 		int width = 1600;
@@ -761,6 +763,7 @@ namespace
 // numbers measured by decoding each track on its own.
 
 #include "../src/audio/audio.h"
+#include "../src/audio/device.h"
 
 namespace
 {
@@ -795,6 +798,10 @@ namespace
 		bool Open(const Config& config, std::string& error);
 		void Close();
 		bool open() const { return m_opened; }
+		// The device path needs the engine itself and the rate it was opened at.
+		artemis::audio::Engine* engine() { return &m_engine; }
+		const artemis::audio::Engine* engine() const { return &m_engine; }
+		int sampleRate() const { return m_config.sampleRate; }
 
 		// one tag, already expanded by the interpreter; false when it could not be
 		// acted on (and `note` says why)
@@ -812,6 +819,7 @@ namespace
 
 		const std::vector<AudioTrackReport>& tracks() const { return m_tracks; }
 		const std::vector<std::string>& notes() const { return m_notes; }
+		const std::vector<std::string>& pageLog() const { return m_pageLog; }
 		bool captured() const { return m_captured; }
 		double capturedSeconds() const { return m_capturedSeconds; }
 		double capturedRms() const { return m_capturedRms; }
@@ -1277,6 +1285,7 @@ namespace
 		long long fades = 0;
 		long long unmatched = 0;
 		std::vector<std::string> notes;
+		std::vector<std::string> pageLog;
 	};
 
 	struct LayerAnim
@@ -1953,6 +1962,12 @@ namespace
 		double audioRms = 0;
 		double audioPeak = 0;
 		long long audioFrames = 0;
+		long long engineFrames = 0;
+		int streamsMax = 0;
+		double streamsAvg = 0;
+		long long streamSamples = 0;
+		size_t audioTracks = 0;
+		std::string currentBgm;
 		bool audioSilent = true;
 		int msgspeed = 30;
 		int width = 0;
@@ -1997,6 +2012,18 @@ namespace
 		{
 			m_now = nowMs;
 			m_sink.now = nowMs;
+			// The device pulls the mixer on its own thread, so the only honest
+			// statistics are the mixer's own: how many streams are sounding right
+			// now, and how much it has mixed.  Sampling once per frame is enough to
+			// see BGM + SE + voice overlap.
+			if(m_audioOpen)
+			{
+				const int active = m_audio.engine()->ActiveStreams();
+				if(active > m_streamsMax)
+					m_streamsMax = active;
+				m_streamsTotal += active;
+				m_streamSamples++;
+			}
 		}
 
 		int RegionCount() const override { return (int)m_vm->clickRegions().size(); }
@@ -2014,6 +2041,10 @@ namespace
 		bool ChoiceRect(int index, int& left, int& top, int& width, int& height) const override;
 		void Choose(int index) override;
 		void MixAudio(float* out, int frames) override;
+		bool OpenAudioDevice(std::string& info, std::string& fallback) override;
+		void CloseAudioDevice() override;
+		void AudioStats(std::vector<std::string>& out) override;
+		const std::string& deviceInfo() const;
 
 		// for the report
 		const artemis::Vm& vm() const { return *m_vm; }
@@ -2026,6 +2057,21 @@ namespace
 		size_t choiceTotal() const { return m_choiceTotal; }
 		int chosen() const { return m_chosen; }
 		double audioRms() const { return m_audioRms; }
+		int streamsMax() const { return m_streamsMax; }
+		long long streamSamples() const { return m_streamSamples; }
+		double streamsAvg() const
+		{
+			return m_streamSamples > 0 ? (double)m_streamsTotal / (double)m_streamSamples : 0;
+		}
+		long long engineFrames() const
+		{
+			return m_audioOpen ? m_audio.engine()->FramesMixed() : 0;
+		}
+		std::string currentBgm() const
+		{
+			return m_audioOpen ? m_audio.engine()->CurrentBgm() : std::string();
+		}
+		size_t trackCount() const { return m_audio.tracks().size(); }
 		double audioPeak() const { return m_audioPeak; }
 		long long audioFrames() const { return m_audioFrames; }
 		int width() const { return m_stage->width(); }
@@ -2073,9 +2119,13 @@ namespace
 		FxDriver m_fx;
 		AudioBridge m_audio;
 		bool m_audioOpen = false;
+		artemis::audio::Device m_device;
+		artemis::audio::DeviceTarget m_target;
+		std::string m_deviceInfo;
 		Sink m_sink;
 		artemis::PageText m_page;
 		artemis::Canvas m_scratch;
+		std::vector<std::string> m_pageLog;
 		std::string m_revealText;
 		artemis::fx::Text m_segmented;
 		int m_msgspeed = 30;
@@ -2092,6 +2142,9 @@ namespace
 		long long m_audioFrames = 0;
 		long long m_audioSamples = 0;
 		int64_t m_now = 0;
+		int m_streamsMax = 0;
+		long long m_streamsTotal = 0;
+		long long m_streamSamples = 0;
 	};
 
 	bool InteractiveHost::Open(const Options& options, std::string& error)
@@ -2100,6 +2153,8 @@ namespace
 		if(!options.archive.empty() && !m_assets.AddArchive(options.archive, error))
 			return false;
 		if(!options.dataDir.empty() && !m_assets.AddDirectory(options.dataDir, error))
+			return false;
+		if(!options.extraDir.empty() && !m_assets.AddDirectory(options.extraDir, error))
 			return false;
 		if(m_assets.empty())
 		{
@@ -2162,9 +2217,14 @@ namespace
 
 		if(options.audio || !options.audioCapture.empty())
 		{
+			// the engine has to be opened at the device's own rate: the mixer
+			// resamples the shipped 44100 material to whatever the machine runs at
+			m_target = artemis::audio::Device::QueryDefault();
 			AudioBridge::Config audioConfig;
 			audioConfig.assets = &m_assets;
 			audioConfig.workDir = "/tmp/agame-audio";
+			if(m_target.available && m_target.sampleRate >= 8000)
+				audioConfig.sampleRate = (int)m_target.sampleRate;
 			std::string audioError;
 			if(m_audio.Open(audioConfig, audioError))
 			{
@@ -2219,6 +2279,8 @@ namespace
 					fprintf(stderr, "[page] %s:%d speaker=\"%s\" %zu chars\n",
 						event.file.c_str(), event.line, event.speaker.c_str(),
 						event.text.size());
+				if(m_pageLog.size() < 12)
+					m_pageLog.push_back(event.text);
 				artemis::PlayHost::Step step;
 				step.kind = artemis::PlayHost::Step::Kind::Page;
 				step.text = event.text;
@@ -2250,8 +2312,23 @@ namespace
 			{
 				// [stop] parks the script: the screen stays, its buttons are live
 				if(m_options.verbose)
+				{
 					fprintf(stderr, "[idle] %s:%d [stop], %zu click region(s)\n",
 						event.file.c_str(), event.line, m_vm->clickRegions().size());
+					for(size_t i = 0; i < m_vm->clickRegions().size(); i++)
+					{
+						int left = 0, top = 0, width = 0, height = 0;
+						const bool boxed = m_vm->RegionBox((int)i, left, top, width, height);
+						const artemis::Vm::ClickRegion& region = m_vm->clickRegions()[i];
+						fprintf(stderr, "   region %zu %-5s box=%d %d,%d %dx%d image=%d "
+							"threshold=%d -> %s:%s\n", i, region.id.c_str(), (int)boxed, left,
+							top, width, height, (int)region.hasImage, region.threshold,
+							region.file.c_str(), region.label.c_str());
+					}
+					if(!m_vm->assetFailuresText().empty())
+						fprintf(stderr, "   asset failures: %s\n",
+							m_vm->assetFailuresText().c_str());
+				}
 				artemis::PlayHost::Step step;
 				step.kind = artemis::PlayHost::Step::Kind::Idle;
 				return step;
@@ -2370,6 +2447,64 @@ namespace
 		}
 	}
 
+	bool InteractiveHost::OpenAudioDevice(std::string& info, std::string& fallback)
+	{
+		if(!m_audioOpen)
+		{
+			fallback = "the mixer is not open (no assets for the ogg members)";
+			return false;
+		}
+		std::string reason;
+		if(!m_target.available)
+		{
+			fallback = m_target.reason.empty() ? "no default output device" : m_target.reason;
+			return false;
+		}
+		if(!m_device.Open(m_audio.engine(), m_target, &reason))
+		{
+			fallback = reason;
+			return false;
+		}
+		if(!m_device.Start(&reason))
+		{
+			fallback = reason;
+			m_device.Close();
+			return false;
+		}
+		char line[256];
+		snprintf(line, sizeof line, "%s, %.0f Hz, %d ch, buffer %d frames (CoreAudio)",
+			m_device.deviceName().c_str(), m_device.SampleRate(), m_target.channels,
+			m_device.BufferFrames());
+		m_deviceInfo = line;
+		info = m_deviceInfo;
+		return true;
+	}
+
+	void InteractiveHost::CloseAudioDevice()
+	{
+		m_device.Stop();
+		m_device.Close();
+	}
+
+	void InteractiveHost::AudioStats(std::vector<std::string>& out)
+	{
+		m_device.RefreshStats();
+		const artemis::audio::CallbackStats& stats = m_device.Stats();
+		char line[512];
+		snprintf(line, sizeof line,
+			"callback: %llu call(s), %llu frame(s), underruns %llu, interval p50 %.3f ms "
+			"p99 %.3f ms max %.3f ms jitter %.3f ms",
+			(unsigned long long)stats.callbacks, (unsigned long long)stats.frames,
+			(unsigned long long)stats.underruns, stats.intervalP50Ms, stats.intervalP99Ms,
+			stats.intervalMaxMs, stats.intervalJitterMs);
+		out.push_back(line);
+		snprintf(line, sizeof line, "mix work inside the callback: p50 %.1f us, p99 %.1f us, "
+			"max %.1f us", stats.workP50Us, stats.workP99Us, stats.workMaxUs);
+		out.push_back(line);
+	}
+
+	const std::string& InteractiveHost::deviceInfo() const { return m_deviceInfo; }
+
 	void InteractiveHost::MixAudio(float* out, int frames)
 	{
 		if(!m_audioOpen)
@@ -2397,9 +2532,13 @@ namespace
 	PlayRun RunInteractive(const Options& options);
 }
 
-static PlayRun RunInteractiveImpl(const Options& options)
+static PlayRun RunInteractiveImpl(const Options& optionsIn)
 {
 	PlayRun run;
+	// a running game has sound unless it is told not to; the still-frame path keeps
+	// its own default (silent) so its numbers do not move
+	Options options = optionsIn;
+	options.audio = !options.noAudio;
 	InteractiveHost host;
 	std::string error;
 	if(!host.Open(options, error))
@@ -2429,6 +2568,8 @@ static PlayRun RunInteractiveImpl(const Options& options)
 	play.quitAfterPages = options.quitAfterPages;
 	play.hashFrames = options.hashFrames;
 	play.maxFrames = options.realTime ? host.fps() * 60 * 10 : 4000;
+	play.verboseInput = options.verbose;
+	play.quitWhenOutOfInput = !options.realTime;
 	play.capturePath = options.audioCapture;
 	play.captureSeconds = options.audioSeconds;
 
@@ -2456,6 +2597,13 @@ static PlayRun RunInteractiveImpl(const Options& options)
 	run.audioPeak = host.audioPeak();
 	run.audioFrames = host.audioFrames();
 	run.audioSilent = host.audioPeak() < 1.0 / 32768.0;
+	run.engineFrames = host.engineFrames();
+	run.streamsMax = host.streamsMax();
+	run.streamsAvg = host.streamsAvg();
+	run.streamSamples = host.streamSamples();
+	run.audioTracks = host.trackCount();
+	run.currentBgm = host.currentBgm();
+	run.pageLog = host.pageLog();
 	for(size_t i = 0; i < host.vm().clickRegions().size() && i < 10; i++)
 	{
 		const artemis::Vm::ClickRegion& region = host.vm().clickRegions()[i];
@@ -2517,8 +2665,23 @@ namespace
 			(double)stats.peakRss / (1024.0 * 1024.0));
 
 		printf("\n--- sound --------------------------------------------------------------\n");
-		printf("frames mixed: %lld; rms=%.4f peak=%.3f%s\n", run.audioFrames, run.audioRms,
-			run.audioPeak, run.audioSilent ? " SILENT" : "");
+		const std::string deviceInfo = stats.audioDeviceInfo.empty()
+			? std::string("(none - mixed in the render loop)") : stats.audioDeviceInfo;
+		printf("device: %s\n", deviceInfo.c_str());
+		if(!stats.audioFallback.empty())
+			printf("fallback reason: %s\n", stats.audioFallback.c_str());
+		const std::string bgm = run.currentBgm.empty()
+			? std::string("no BGM named")
+			: ("BGM \"" + run.currentBgm + "\"");
+		printf("mixer: %lld frame(s) pulled, %zu track(s) resolved, %s\n",
+			(long long)run.engineFrames, run.audioTracks, bgm.c_str());
+		printf("streams sounding: max %d, average %.2f over %lld sample(s)\n",
+			run.streamsMax, run.streamsAvg, run.streamSamples);
+		for(const std::string& line : stats.audioStats)
+			printf("    %s\n", line.c_str());
+		if(!stats.audioDevice)
+			printf("frames mixed in the loop: %lld; rms=%.4f peak=%.3f%s\n", run.audioFrames,
+				run.audioRms, run.audioPeak, run.audioSilent ? " SILENT" : "");
 		for(const std::string& line : run.audioLines)
 			printf("    %s\n", line.c_str());
 		if(!run.notes.empty())
@@ -4773,6 +4936,8 @@ int main(int argc, char** argv)
 			options.audioSeconds = atof(argv[++i]);
 		else if(arg == "--audio")
 			options.audio = true;
+		else if(arg == "--no-audio")
+			options.noAudio = true;
 		else if(arg == "--fx")
 			options.fx = true;
 		else if(arg == "--fx-at" && hasValue)
@@ -4821,6 +4986,8 @@ int main(int argc, char** argv)
 		}
 		else if(arg == "--play-pages" && hasValue)
 			options.quitAfterPages = atoi(argv[++i]);
+		else if(arg == "--extra-dir" && hasValue)
+			options.extraDir = argv[++i];
 		else if(arg == "--size" && hasValue)
 		{
 			options.size = argv[++i];

@@ -13,7 +13,7 @@ namespace fx
 	namespace
 	{
 		constexpr int kMaxCallDepth = 64;
-		constexpr size_t kMaxEvents = 512;
+		constexpr size_t kMaxEvents = 50000;
 
 		class Walker
 		{

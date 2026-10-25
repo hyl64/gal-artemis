@@ -95,6 +95,18 @@ namespace artemis
 		// Interleaved stereo float32, `frames` frames.  Called from the audio
 		// device's thread when a device is open, and from the loop when none is.
 		virtual void MixAudio(float* out, int frames) = 0;
+
+		// Real sound.  The host owns the device (CoreAudio, through the audio
+		// layer), so this file needs no audio API at all: it either has a device
+		// pulling MixAudio() or it mixes on its own clock.  `info` describes what
+		// opened; `fallback` says why nothing did, and is printed.
+		virtual bool OpenAudioDevice(std::string& info, std::string& fallback)
+		{
+			fallback = "this host has no audio device";
+			return false;
+		}
+		virtual void CloseAudioDevice() {}
+		virtual void AudioStats(std::vector<std::string>& out) { (void)out; }
 	};
 
 	struct PlayOptions
@@ -120,6 +132,10 @@ namespace artemis
 		// would otherwise spin forever - so every run has a frame budget, and hitting
 		// it is reported rather than silently ignored.
 		int maxFrames = 200000;
+		bool verboseInput = false;  // print what each click did
+		// A headless run has nobody to click.  When the scripted input is spent, the
+		// loop ends instead of spinning - a real window keeps waiting for a person.
+		bool quitWhenOutOfInput = true;
 	};
 
 	struct PlayStats
@@ -153,12 +169,15 @@ namespace artemis
 		std::string audioDriver;
 		bool audioDevice = false;
 		std::string audioFallback;
+		std::string audioDeviceInfo;
+		std::vector<std::string> audioStats;
 		int audioFreq = 0;
 		int audioSilence = 0;
 		int64_t audioFramesMixed = 0;
 
 		bool realTime = false;
 		bool budgetHit = false;
+		bool inputExhausted = false;
 		int stalledTokens = 0;      // scripted inputs that never found anything to hit
 		std::vector<uint64_t> frameHashes; // one per frame when asked for
 		std::string capturePath;

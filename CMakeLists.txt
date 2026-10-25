@@ -59,6 +59,19 @@ if(ARTEMIS_SAVE_SOURCES)
 	target_link_libraries(artemis_save PUBLIC artemis)
 endif()
 
+# Video: AVFoundation is an Objective-C API, and the project does not declare the
+# OBJCXX language, so these sources are compiled as Objective-C++ explicitly.
+# C++ is a subset of Objective-C++, so a plain C++ file compiled this way is fine.
+file(GLOB ARTEMIS_MOVIE_SOURCES CONFIGURE_DEPENDS src/movie/*.cpp)
+if(ARTEMIS_MOVIE_SOURCES)
+	add_library(artemis_movie STATIC ${ARTEMIS_MOVIE_SOURCES})
+	set_source_files_properties(${ARTEMIS_MOVIE_SOURCES} PROPERTIES
+		COMPILE_FLAGS "-x objective-c++ -fobjc-arc")
+	target_link_libraries(artemis_movie PUBLIC artemis
+		"-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo"
+		"-framework CoreFoundation" "-framework Foundation")
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PNG REQUIRED libpng)
 target_include_directories(artemis PUBLIC ${PNG_INCLUDE_DIRS})
@@ -147,6 +160,10 @@ if(TARGET artemis_save AND EXISTS "${CMAKE_SOURCE_DIR}/tools/savetool.cpp")
 			"-framework CoreText" "-framework CoreGraphics" "-framework ImageIO")
 		target_compile_definitions(savetool PRIVATE ARTEMIS_SAVE_VM=1)
 	endif()
+endif()
+if(TARGET artemis_movie AND EXISTS "${CMAKE_SOURCE_DIR}/tools/movietool.cpp")
+	add_executable(movietool tools/movietool.cpp)
+	target_link_libraries(movietool PRIVATE artemis_movie)
 endif()
 if(TARGET artemis_fx AND EXISTS "${CMAKE_SOURCE_DIR}/tools/fxtool.cpp")
 	add_executable(fxtool tools/fxtool.cpp)

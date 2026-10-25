@@ -182,7 +182,6 @@ namespace artemis
 		SDL_Window* window = nullptr;
 		SDL_Renderer* renderer = nullptr;
 		SDL_Texture* texture = nullptr;
-		SDL_AudioDeviceID device = 0;
 		bool audioDevice = false;
 		std::string audioFallback;
 		int audioFreq = 0;
@@ -207,24 +206,26 @@ namespace artemis
 		int64_t clickedAt = -1;
 		int64_t lastAdvanceAt = -1000;
 		int stallFrames = 0;
+		bool pendingAdvance = false;
+		// What the loop is waiting for.  A latch ("we have seen the title") is not
+		// enough: after the story starts, a click must advance the page, not hit the
+		// title's start button a second time.
+		enum class Mode
+		{
+			Need,   // the script has not answered yet
+			Page,   // words on screen, revealing or complete
+			Idle,   // parked with clickable regions (the title screen)
+			Choice, // options on screen
+		};
+		Mode mode = Mode::Need;
 
 		Impl() : canvas(1, 1) {}
-
-		static void AudioCallback(void* userdata, Uint8* stream, int length)
-		{
-			Player::Impl* self = (Player::Impl*)userdata;
-			const int frames = length / (int)(sizeof(float) * 2);
-			std::memset(stream, 0, (size_t)length);
-			if(self->host != nullptr)
-				self->host->MixAudio((float*)(void*)stream, frames);
-			self->stats.audioFramesMixed += frames;
-		}
 
 		bool OpenAudio(std::string& error);
 		void CloseAudio();
 		bool Shot(const std::string& path, std::string& error);
 		void HandleKey(int keycode);
-		bool PumpScripted(int64_t nowMs);
+		bool PumpScripted(int64_t nowMs, bool waitingForStep);
 		PlayStats RunLoop(std::string& error);
 	};
 
@@ -233,61 +234,30 @@ namespace artemis
 		error.clear();
 		if(!options.audio)
 			return true;
-		if(SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
+		// The device belongs to the host (it owns the audio layer).  A machine with
+		// no output still runs: the loop mixes the same callback on its own clock,
+		// and the reason is kept for the report instead of being swallowed.
+		std::string info;
+		if(host->OpenAudioDevice(info, audioFallback))
 		{
-			audioFallback = std::string("no audio subsystem: ") + SDL_GetError();
-			return true;
+			audioDevice = true;
+			stats.audioDeviceInfo = info;
+			audioDriver = info;
+			std::printf("agame: audio device: %s\n", info.c_str());
+			std::fflush(stdout);
 		}
-		SDL_AudioSpec want;
-		std::memset(&want, 0, sizeof want);
-		want.freq = options.audioRate;
-		want.format = AUDIO_F32SYS;
-		want.channels = 2;
-		want.samples = (Uint16)options.audioFrames;
-		want.callback = &Player::Impl::AudioCallback;
-		want.userdata = this;
-		SDL_AudioSpec have;
-		std::memset(&have, 0, sizeof have);
-		const char* driver = SDL_GetCurrentAudioDriver();
-		audioDriver = driver == nullptr ? "(none)" : driver;
-		device = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
-		if(device == 0)
+		else if(!audioFallback.empty())
 		{
-			// A machine with no sound card still has to be able to run the game and
-			// be checked.  The reason is kept and printed; the loop then mixes the
-			// same callback into a WAV instead of into a device.
-			audioFallback = std::string("no audio device (") + audioDriver +
-				"): " + SDL_GetError();
-			SDL_QuitSubSystem(SDL_INIT_AUDIO);
-			if(SDL_InitSubSystem(SDL_INIT_AUDIO) != 0)
-				return true;
-			const char* dummy = SDL_GetCurrentAudioDriver();
-			audioDriver = dummy == nullptr ? "(none)" : dummy;
-			if(have.format != 0 && have.format != AUDIO_F32SYS)
-				audioFallback += "; the device wanted a format this mixer does not write";
-			return true;
+			fprintf(stderr, "agame: audio: no device (%s) - mixing in the render loop\n",
+				audioFallback.c_str());
 		}
-		if(have.format != AUDIO_F32SYS)
-		{
-			audioFallback = "the device does not take float32: falling back to mixing in "
-				"the loop";
-			SDL_CloseAudioDevice(device);
-			device = 0;
-			return true;
-		}
-		audioDevice = true;
-		audioFreq = have.freq;
-		SDL_PauseAudioDevice(device, 0); // start pulling
 		return true;
 	}
 
 	void Player::Impl::CloseAudio()
 	{
-		if(device != 0)
-		{
-			SDL_CloseAudioDevice(device);
-			device = 0;
-		}
+		if(audioDevice)
+			host->CloseAudioDevice();
 		audioDevice = false;
 	}
 
@@ -320,8 +290,10 @@ namespace artemis
 		}
 	}
 
-	bool Player::Impl::PumpScripted(int64_t nowMs)
+	bool Player::Impl::PumpScripted(int64_t nowMs, bool waitingForStep)
 	{
+		if(waitingForStep)
+			return false; // the script has not answered yet: do not spend input on it
 		if(scriptAt >= script.size())
 			return false;
 		const ScriptedInput& token = script[scriptAt];
@@ -344,95 +316,82 @@ namespace artemis
 			scriptAt++;
 			return true;
 		}
-		// the rest need the loop to be waiting for a decision
+
+		if(mode == Mode::Choice)
+		{
+			int index = 0;
+			if(token.token == Token::Choice)
+				index = std::max(0, std::min(token.value - 1, host->ChoiceCount() - 1));
+			host->Choose(index);
+			stats.chosen = index + 1;
+			clickedAt = nowMs;
+			scriptAt++;
+			pendingAdvance = true;
+			mode = Mode::Need;
+			return true;
+		}
+
+		if(mode == Mode::Idle)
+		{
+			// The idle screen: a click lands on a region or on nothing.  A plain
+			// "space" means "the obvious button", which is the first region - on the
+			// title screen that is start.
+			const bool pointToken = token.token == Token::Click && token.hasPoint;
+			int hit = -1;
+			for(int i = 0; i < host->RegionCount() && hit < 0; i++)
+			{
+				int left = 0, top = 0, width = 0, height = 0;
+				if(!host->RegionRect(i, left, top, width, height))
+					continue;
+				if(pointToken)
+				{
+					if(token.x >= left && token.y >= top && token.x < left + width &&
+						token.y < top + height && host->RegionHit(i, token.x, token.y))
+						hit = i;
+				}
+				else if(host->RegionHit(i, left + width / 2, top + height / 2))
+					hit = i;
+			}
+			if(hit >= 0)
+			{
+				if(options.verboseInput)
+					fprintf(stderr, "play: click -> region %d\n", hit);
+				host->ActivateRegion(hit);
+				stats.clicks++;
+				clickedAt = nowMs;
+				scriptAt++;
+				pendingAdvance = true;
+				mode = Mode::Need;
+				return true;
+			}
+			if(++stallFrames > 240)
+			{
+				fprintf(stderr, "play: scripted input \"%s\" found nothing to click after "
+					"240 frames (%d region(s))\n", token.token == Token::Click ? "click"
+					: "space", host->RegionCount());
+				stats.stalledTokens++;
+				stallFrames = 0;
+				scriptAt++;
+			}
+			return true;
+		}
+
+		// Mode::Page
 		if(!revealed)
 		{
-			// a click while the page is still typing: finish the page, do not skip it
+			// a click while the page is still typing finishes the page, it does not
+			// skip it - the behaviour every galgame has, and the self test pins it
 			revealed = true;
 			revealStart = nowMs - revealMs;
 			stats.completedReveals++;
 			stats.clicks++;
 			clickedAt = nowMs;
 			scriptAt++;
+			if(options.verboseInput)
+				fprintf(stderr, "play: click completes the reveal (%d glyph ms)\n",
+					(int)revealMs);
 			return true;
 		}
-		if(stats.choices > 0 && token.token == Token::Choice)
-		{
-			int index = token.value - 1;
-			if(index < 0 || index >= host->ChoiceCount())
-				index = 0;
-			host->Choose(index);
-			stats.chosen = token.value;
-			stats.choices--;
-			clickedAt = nowMs;
-			scriptAt++;
-			return true;
-		}
-		if(stats.choices > 0 && (token.token == Token::Advance || token.token == Token::Click))
-		{
-			host->Choose(0);
-			stats.chosen = 1;
-			stats.choices--;
-			clickedAt = nowMs;
-			scriptAt++;
-			return true;
-		}
-		if(stats.idleSeen && token.token == Token::Click && token.hasPoint)
-		{
-			for(int i = 0; i < host->RegionCount(); i++)
-			{
-				int left = 0, top = 0, width = 0, height = 0;
-				if(!host->RegionRect(i, left, top, width, height))
-					continue;
-				if(token.x >= left && token.y >= top && token.x < left + width &&
-					token.y < top + height && host->RegionHit(i, token.x, token.y))
-				{
-					host->ActivateRegion(i);
-					stats.clicks++;
-					clickedAt = nowMs;
-					scriptAt++;
-					return true;
-				}
-			}
-			// not a hit yet: try again next frame, but do not spin forever on a
-			// click that will never land
-			if(++stallFrames > 240)
-			{
-				stats.stalledTokens++;
-				stallFrames = 0;
-				scriptAt++;
-			}
-			return true;
-		}
-		if(stats.idleSeen && (token.token == Token::Advance || token.token == Token::Click))
-		{
-			// in the idle state a plain click means "the obvious button": the first
-			// region, which on the title screen is the start button
-			for(int i = 0; i < host->RegionCount(); i++)
-			{
-				int left = 0, top = 0, width = 0, height = 0;
-				if(!host->RegionRect(i, left, top, width, height))
-					continue;
-				if(host->RegionHit(i, left + width / 2, top + height / 2))
-				{
-					host->ActivateRegion(i);
-					stats.clicks++;
-					clickedAt = nowMs;
-					scriptAt++;
-					return true;
-				}
-			}
-			if(++stallFrames > 240)
-			{
-				fprintf(stderr, "play: scripted \"%s\" found nothing to click after 240 "
-					"frames (%d region(s))\n", "click", host->RegionCount());
-				stats.stalledTokens++;
-				stallFrames = 0;
-				scriptAt++;
-			}
-			return true;
-		}
-		// a page that is fully shown: advance
 		if(nowMs - lastAdvanceAt < 60)
 			return true; // the debounce: no double-advance
 		stats.advances++;
@@ -440,6 +399,7 @@ namespace artemis
 		clickedAt = nowMs;
 		lastAdvanceAt = nowMs;
 		scriptAt++;
+		pendingAdvance = true;
 		return true;
 	}
 
@@ -572,7 +532,7 @@ namespace artemis
 				{
 					const int x = event.button.x;
 					const int y = event.button.y;
-					if(stats.choices > 0)
+					if(mode == Mode::Choice)
 					{
 						for(int i = 0; i < host->ChoiceCount(); i++)
 						{
@@ -583,13 +543,14 @@ namespace artemis
 							{
 								host->Choose(i);
 								stats.chosen = i + 1;
-								stats.choices--;
 								clickedAt = now;
+								need = true;
+								mode = Mode::Need;
 								break;
 							}
 						}
 					}
-					else if(stats.idleSeen)
+					else if(mode == Mode::Idle)
 					{
 						for(int i = 0; i < host->RegionCount(); i++)
 							if(host->RegionHit(i, x, y))
@@ -597,10 +558,12 @@ namespace artemis
 								host->ActivateRegion(i);
 								stats.clicks++;
 								clickedAt = now;
+								need = true;
+								mode = Mode::Need;
 								break;
 							}
 					}
-					else if(revealed)
+					else if(mode == Mode::Page && revealed)
 					{
 						if(now - lastAdvanceAt >= 60)
 						{
@@ -611,7 +574,7 @@ namespace artemis
 							need = true;
 						}
 					}
-					else
+					else if(mode == Mode::Page)
 					{
 						revealed = true;
 						revealStart = now - revealMs;
@@ -621,7 +584,18 @@ namespace artemis
 					}
 				}
 			}
-			PumpScripted(now);
+			const bool pumped = PumpScripted(now, need);
+			if(!pumped && options.quitWhenOutOfInput && scriptAt >= script.size())
+			{
+				stats.inputExhausted = true;
+				quit = true;
+				continue;
+			}
+			if(pendingAdvance)
+			{
+				pendingAdvance = false;
+				need = true;
+			}
 
 			// --- the script ----------------------------------------------------
 			if(need)
@@ -670,6 +644,7 @@ namespace artemis
 				}
 				else if(step.kind == PlayHost::Step::Kind::Idle)
 				{
+					mode = host->ChoiceCount() > 0 ? Mode::Choice : Mode::Idle;
 					// the script parked itself on a screen with buttons: draw it and
 					// wait for a click on a region
 					stats.idleSeen = true;
@@ -689,6 +664,7 @@ namespace artemis
 				else if(step.kind == PlayHost::Step::Kind::End)
 				{
 					stats.ended = true;
+					mode = Mode::Need;
 					quit = true;
 					continue;
 				}
@@ -775,7 +751,9 @@ namespace artemis
 		stats.audioDriver = audioDriver;
 		stats.audioDevice = audioDevice;
 		stats.audioFallback = audioFallback;
-		stats.audioFreq = audioFreq > 0 ? audioFreq : (audioDevice ? options.audioRate : 0);
+		stats.audioFreq = audioDevice ? options.audioRate : 0;
+		if(audioDevice)
+			host->AudioStats(stats.audioStats);
 		stats.frameAvgMs = frameTimes.empty() ? 0
 			: std::accumulate(frameTimes.begin(), frameTimes.end(), 0.0) /
 				(double)frameTimes.size();
