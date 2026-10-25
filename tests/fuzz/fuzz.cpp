@@ -55,6 +55,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <map>
 #include <typeinfo>
 #include <random>
 #include <string>
@@ -1099,6 +1100,8 @@ namespace
 			return "sanitizer";
 		switch(result.code)
 		{
+		case kOk: return "ok";
+		case kRejected: return "rejected";
 		case kSilentReject: return "silent-reject";
 		case kErrorAsSuccess: return "error-success";
 		case kBadException: return "bad-exception";
@@ -1135,7 +1138,33 @@ namespace
 	struct Findings
 	{
 		int saved = 0;
+		int duplicates = 0;
+		int maxPerKind = 3; // the tenth copy of one bug is noise, not a finding
 		std::vector<std::string> lines; // one line per finding, for FINDINGS.md
+		std::map<std::string, int> perKind;
+
+		bool Accept(const std::string& parser, const std::string& kind, const std::string& why)
+		{
+			// a "kind" here is the parser plus the first two words of the reason, so
+			// twelve truncated-entry names count once while twelve different failures
+			// all get saved
+			std::string key = parser + "|" + kind + "|";
+			size_t words = 0;
+			for(size_t i = 0; i < why.size() && words < 4; i++)
+			{
+				if(why[i] == ' ')
+					words++;
+				else
+					key += why[i];
+			}
+			const int seen = perKind[key]++;
+			if(seen >= maxPerKind)
+			{
+				duplicates++;
+				return false;
+			}
+			return true;
+		}
 	};
 
 	void SaveFinding(const std::string& outDir, const std::string& parser,
@@ -1257,6 +1286,8 @@ namespace
 			else if(result.code == kBadException)
 				stats.badException++;
 
+			if(!findings.Accept(parser, KindName(result), result.detail))
+				continue;
 			// a finding is only worth filing if it can be reproduced
 			const std::vector<uint8_t> minimal =
 				Minimise(runner, input, result.code, timeoutMs, ceiling, 120);
@@ -1508,6 +1539,111 @@ namespace
 	}
 
 	// ---------------------------------------------------------------------------
+	// findings: every documented finding as a file, generated from code
+	//
+	// The campaign saves whatever mutation happens to hit a bug, which means the
+	// names change from run to run.  These are the same failures with fixed names
+	// and a note beside each, so FINDINGS.md can point at something that exists
+	// and the owner of each parser can reproduce in one command without a fuzzing
+	// run.  Byte-for-byte deterministic: no RNG here.
+	// ---------------------------------------------------------------------------
+	void WriteProbe(const std::string& outDir, const std::string& name,
+		const std::string& parser, const std::string& finding, const std::string& why,
+		const std::vector<uint8_t>& bytes)
+	{
+		EnsureDirectory(outDir);
+		const std::string base = outDir + "/" + name;
+		WriteBinary(base, bytes);
+		FILE* note = fopen((base + ".txt").c_str(), "w");
+		if(note == nullptr)
+			return;
+		fprintf(note, "parser:  %s\n", parser.c_str());
+		fprintf(note, "finding: %s\n", finding.c_str());
+		fprintf(note, "why:     %s\n", why.c_str());
+		fprintf(note, "size:    %zu bytes\n", bytes.size());
+		fprintf(note, "stack:   ./build/fuzz direct %s %s\n", base.c_str(), parser.c_str());
+		fprintf(note, "verdict: ./build/fuzz repro %s %s\n", base.c_str(), parser.c_str());
+		fclose(note);
+	}
+
+	std::vector<uint8_t> NestedLua(const std::string& prefix, int depth)
+	{
+		std::string text = prefix;
+		for(int i = 0; i < depth; i++)
+			text += "{a=";
+		text += "1";
+		for(int i = 0; i < depth; i++)
+			text += "}";
+		text += "\n";
+		return AsBytes(text);
+	}
+
+	int WriteFindings(const std::string& outDir)
+	{
+		// F1: the Lua reader recurses with no depth limit.  Both .ast and .ipt go
+		// through it, so one bug has two front doors.
+		WriteProbe(outDir, "f1-lua-nesting-10000.ast", "ast", "crash (stack overflow)",
+			"ParseLuaAst -> lua.cpp ParseValue/ParseObject recurse once per nesting "
+			"level; 10000 levels exhaust the 8 MiB stack", NestedLua("ast = ", 10000));
+		WriteProbe(outDir, "f1-lua-nesting-5000.ipt", "ipt", "crash (stack overflow)",
+			"the same reader behind ParseIpt: a .ipt is also a Lua table",
+			NestedLua("ipt = ", 5000));
+
+		// F2: a number outside int range is cast to int, which is undefined
+		WriteProbe(outDir, "f2-ipt-canvas-4g.ipt", "ipt", "bad-exception (UB)",
+			"ipt.cpp:46 IntValue casts a Lua number to int; 4294967296 is out of "
+			"range (UBSan: \"outside the range of representable values of type int\")",
+			AsBytes("ipt = { mode = \"cut\", base = { w = 4294967296, h = 4294967296, x = 0, y = 0 },\n"
+				"\t{ id = 0, file = \"a\", x = 0, y = 0 },\n}\n"));
+
+		// F3: no line-length limit in the .iet reader
+		{
+			std::vector<uint8_t> bytes;
+			const size_t length = 4u * 1024u * 1024u;
+			bytes.reserve(length + 8);
+			for(size_t i = 0; i < length; i++)
+				bytes.push_back((uint8_t)('a' + (i % 26)));
+			bytes.push_back('\r');
+			bytes.push_back('\n');
+			WriteProbe(outDir, "f3-iet-one-line-4mb.iet", "iet", "resource (no limit)",
+				"one 4 MiB line is accepted; the 100 MiB probe (run.sh limits) takes "
+				"2.7 s and 492 MiB, so there is no line-length ceiling", bytes);
+		}
+
+		// F4: entry names are taken verbatim.  A NUL truncates the path that
+		// pfstool builds, and `..` walks out of the extraction directory.
+		{
+			const std::string nulName("root\\a\0b.png", 13);
+			const std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+				{ nulName, std::vector<uint8_t>{ 'x' } },
+			};
+			const std::vector<uint8_t> bytes = artemis::Build(files, "pf8", false);
+			WriteProbe(outDir, "f4a-pfs-entry-name-nul.pfs", "pfs", "error-success",
+				"an entry name with an embedded NUL is accepted; tools/pfstool.cpp:140 "
+				"builds the output path from it, so fopen() writes a truncated name", bytes);
+		}
+		{
+			const std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+				{ "..\\..\\escaped.txt", std::vector<uint8_t>{ 'p', 'w', 'n', 'e', 'd' } },
+			};
+			const std::vector<uint8_t> bytes = artemis::Build(files, "pf8", false);
+			WriteProbe(outDir, "f4b-pfs-entry-name-traversal.pfs", "pfs", "note (tool)",
+				"NormalizeName (src/pfs.cpp:551) lowercases and fixes slashes but does not "
+				"remove '..'; pfstool extract then writes outside its target directory",
+				bytes);
+		}
+
+		// F5: the entry count is reserved before it is checked against the index
+		WriteProbe(outDir, "f5-pfs-count-3.9m-small-index.pfs", "pfs", "resource (amplification)",
+			"src/pfs.cpp:336 reserves `count` entries before the loop; a 1 KiB file "
+			"declaring 3.9M entries makes the reader reserve 238 MiB, then throw",
+			BuildPf8Header(16, 3900000, 1024));
+
+		printf("wrote the documented findings to %s\n", outDir.c_str());
+		return 0;
+	}
+
+	// ---------------------------------------------------------------------------
 	// repro: what a developer runs on a saved file
 	// ---------------------------------------------------------------------------
 	int Repro(const std::string& path, const std::string& parser, int timeoutMs)
@@ -1539,7 +1675,8 @@ namespace
 			"            [--memcap MiB] [--corpus DIR] [--out DIR] [--stop-after N]\n"
 			"       fuzz limits [--corpus DIR] [--out DIR]\n"
 			"       fuzz repro <file> <parser>   (fork, deadline bound)\n"
-			"       fuzz direct <file> <parser>  (in-process, sanitizer output on the terminal)\n");
+			"       fuzz direct <file> <parser>  (in-process, sanitizer output on the terminal)\n"
+			"       fuzz findings [--out DIR]    write every documented finding as a file\n");
 	}
 } // namespace
 
@@ -1579,6 +1716,17 @@ int main(int argc, char** argv)
 				timeoutMs = atoi(argv[++i]);
 		}
 		return RunLimits(corpus, outDir, timeoutMs);
+	}
+	if(command == "findings")
+	{
+		std::string dir = "crashes";
+		for(int i = 2; i < argc; i++)
+		{
+			const std::string arg = argv[i];
+			if(arg == "--out" && i + 1 < argc)
+				dir = argv[++i];
+		}
+		return WriteFindings(dir);
 	}
 	if(command == "direct")
 	{
@@ -1682,7 +1830,8 @@ int main(int argc, char** argv)
 			fprintf(table, "%s\n", line.c_str());
 		fclose(table);
 	}
-	printf("\n%d parser(s) with findings, %d finding(s) saved under %s\n", bad, findings.saved,
-		outDir.c_str());
+	printf("\n%d parser(s) with findings, %d finding(s) saved under %s "
+		"(%d duplicate(s) of an already-saved kind not saved)\n", bad, findings.saved,
+		outDir.c_str(), findings.duplicates);
 	return bad == 0 ? 0 : 1;
 }

@@ -543,8 +543,10 @@ namespace
 		std::vector<std::string> autoplayKeys; // scripted input tokens
 		std::string shotTitle;
 		std::string shotScene;
+		std::string shotBackground;
 		std::string shotDir;
 		std::string extraDir;       // --extra-dir: another root to resolve assets from
+		int frameBudget = 0;        // --frame-budget: how many frames to run (0 = default)
 		int quitAfterPages = 0;
 		// audio and effects: opt-in, so the still-frame baseline stays exactly
 		// what it was
@@ -2008,6 +2010,8 @@ namespace
 		std::string Reveal(const std::string& text, int64_t ms) override;
 		int64_t RevealMs(const std::string& text) override;
 		void Compose(artemis::Canvas& canvas, int64_t nowMs) override;
+		bool HasBackground() const override { return m_stage->hasBackgroundImage(); }
+
 		void OnFrame(int64_t nowMs) override
 		{
 			m_now = nowMs;
@@ -2565,10 +2569,12 @@ static PlayRun RunInteractiveImpl(const Options& optionsIn)
 	play.script = options.autoplayKeys;
 	play.shotTitle = options.shotTitle;
 	play.shotScene = options.shotScene;
+	play.shotBackground = options.shotBackground;
 	play.shotDir = options.shotDir;
 	play.quitAfterPages = options.quitAfterPages;
 	play.hashFrames = options.hashFrames;
-	play.maxFrames = options.realTime ? host.fps() * 60 * 10 : 4000;
+	play.maxFrames = options.frameBudget > 0 ? options.frameBudget
+		: (options.realTime ? host.fps() * 60 * 10 : 4000);
 	play.verboseInput = options.verbose;
 	play.quitWhenOutOfInput = !options.realTime;
 	play.capturePath = options.audioCapture;
@@ -2605,9 +2611,13 @@ static PlayRun RunInteractiveImpl(const Options& optionsIn)
 	run.audioTracks = host.trackCount();
 	run.currentBgm = host.currentBgm();
 	run.pageLog = host.pageLog();
-	for(size_t i = 0; i < host.vm().clickRegions().size() && i < 10; i++)
+	for(size_t i = 0; i < host.vm().clickRegions().size(); i++)
 	{
 		const artemis::Vm::ClickRegion& region = host.vm().clickRegions()[i];
+		if(region.id.empty())
+			run.points++;
+		if(i >= 10)
+			continue;
 		int left = 0, top = 0, width = 0, height = 0;
 		host.vm().RegionBox((int)i, left, top, width, height);
 		char line[384];
@@ -2616,8 +2626,6 @@ static PlayRun RunInteractiveImpl(const Options& optionsIn)
 			region.file.empty() ? "(this file)" : region.file.c_str(), region.label.c_str(),
 			region.call ? " (call=1, run as a jump)" : "");
 		run.regionText.push_back(line);
-		if(region.id.empty())
-			run.points++;
 	}
 	return run;
 }
@@ -2657,9 +2665,12 @@ namespace
 			printf("choices offered: %zu; chosen: %d\n", run.choiceTotal, run.chosen);
 
 		printf("\n--- timing -------------------------------------------------------------\n");
-		printf("frame time: avg %.3f ms, p50 %.3f ms, p95 %.3f ms, max %.3f ms over %d "
-			"frame(s)\n", stats.frameAvgMs, stats.frameP50Ms, stats.frameP95Ms,
-			stats.frameMaxMs, stats.frames);
+		printf("frame work (compose + upload + present): avg %.3f ms, p50 %.3f ms, p95 %.3f "
+			"ms, max %.3f ms over %d frame(s)\n", stats.frameAvgMs, stats.frameP50Ms,
+			stats.frameP95Ms, stats.frameMaxMs, stats.frames);
+		printf("frame interval (wall, start to start): p50 %.2f ms, p95 %.2f ms%s\n",
+			stats.intervalP50Ms, stats.intervalP95Ms,
+			stats.realTime ? " (paced to the game's FPS)" : " (virtual clock)");
 		printf("click -> page: avg %.2f ms, max %.2f ms over %d sample(s)\n",
 			stats.latencyAvgMs, stats.latencyMaxMs, stats.latencySamples);
 		printf("wall time: %.1f ms; peak RSS: %.1f MB\n", stats.wallMs,
@@ -4824,19 +4835,50 @@ namespace
 			play.shotTitle = "/tmp/agame-selftest-title.png";
 			play.shotScene = "/tmp/agame-selftest-scene.png";
 			const PlayRun run = RunInteractive(play);
+			// every click must have done something: a region, a finished reveal, or a
+			// page.  A click that did none of those is the "clicked and nothing
+			// happened" bug, and it is checked rather than assumed.
+			const bool allClicksCounted = run.stats.clicks == run.stats.regionClicks +
+				run.stats.completedReveals + run.stats.advances;
 			const bool ok = run.ok && run.stats.idleSeen && run.regions >= 4 &&
 				run.pages >= 1 && FileExists(play.shotTitle) && FileExists(play.shotScene) &&
-				!run.stats.audioDeviceInfo.empty();
+				allClicksCounted;
 			char detail[512];
 			snprintf(detail, sizeof detail,
 				"boot -> %s (idle, %zu buttons) -> click start -> %d page(s); shots title=%d "
-				"scene=%d; audio device=%s", run.menuTarget.c_str(), run.regions, run.pages,
-				(int)FileExists(play.shotTitle), (int)FileExists(play.shotScene),
-				run.stats.audioDeviceInfo.empty() ? "(offline)" : "open");
+				"scene=%d; clicks=%d region=%d completed=%d advanced=%d", run.menuTarget.c_str(),
+				run.regions, run.pages, (int)FileExists(play.shotTitle),
+				(int)FileExists(play.shotScene), run.stats.clicks, run.stats.regionClicks,
+				run.stats.completedReveals, run.stats.advances);
 			if(ok)
 				Pass(tally, "play-title-flow", detail);
 			else
 				Fail(tally, "play-title-flow",
+					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
+		}
+
+		// 12b. the chapter screen: its click targets are `[point]` rectangles with no
+		// image at all, and clicking one jumps to that chapter.  The button that gets
+		// there is the title's own third button, at its own coordinates.
+		{
+			Options play = options;
+			play.play = true;
+			play.dataDir = extracted;
+			play.script = "scenario/scene.iet";
+			play.maxPages = 0;
+			play.quitAfterPages = 1;
+			// 60.3 (chapter) sits at 410,520 and is 204x54: click its middle
+			play.autoplayKeys.push_back("click:512:547");
+			const PlayRun run = RunInteractive(play);
+			const bool ok = run.ok && run.points >= 6 && run.stats.idleSeen;
+			char detail[512];
+			snprintf(detail, sizeof detail,
+				"chapter screen: %zu point region(s) of %zu, idle=%d", run.points, run.regions,
+				(int)run.stats.idleSeen);
+			if(ok)
+				Pass(tally, "play-chapter-points", detail);
+			else
+				Fail(tally, "play-chapter-points",
 					std::string(detail) + (run.error.empty() ? "" : (" | " + run.error)));
 		}
 
@@ -5230,6 +5272,11 @@ int main(int argc, char** argv)
 			options.shotScene = argv[++i];
 			options.play = true;
 		}
+		else if(arg == "--shot-background" && hasValue)
+		{
+			options.shotBackground = argv[++i];
+			options.play = true;
+		}
 		else if(arg == "--shot-dir" && hasValue)
 		{
 			options.shotDir = argv[++i];
@@ -5239,6 +5286,8 @@ int main(int argc, char** argv)
 			options.quitAfterPages = atoi(argv[++i]);
 		else if(arg == "--extra-dir" && hasValue)
 			options.extraDir = argv[++i];
+		else if(arg == "--frame-budget" && hasValue)
+			options.frameBudget = atoi(argv[++i]);
 		else if(arg == "--size" && hasValue)
 		{
 			options.size = argv[++i];

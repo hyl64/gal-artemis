@@ -195,6 +195,7 @@ namespace artemis
 
 		PlayStats stats;
 		std::vector<double> frameTimes;
+		std::vector<double> frameIntervals;
 		std::vector<double> latencies;
 
 		// the page on screen
@@ -358,6 +359,7 @@ namespace artemis
 					fprintf(stderr, "play: click -> region %d\n", hit);
 				host->ActivateRegion(hit);
 				stats.clicks++;
+				stats.regionClicks++;
 				clickedAt = nowMs;
 				scriptAt++;
 				pendingAdvance = true;
@@ -516,6 +518,75 @@ namespace artemis
 				1000.0 / (double)SDL_GetPerformanceFrequency());
 
 			// --- input ---------------------------------------------------------
+			// One decision for both devices: a key and a click mean the same thing.
+			// `point` is the mouse position; a key has none and takes the middle of
+			// the obvious target.
+			const auto offerInput = [&](bool point, int x, int y) {
+				if(mode == Mode::Choice)
+				{
+					for(int i = 0; i < host->ChoiceCount(); i++)
+					{
+						int left = 0, top = 0, width = 0, height = 0;
+						if(!host->ChoiceRect(i, left, top, width, height))
+							continue;
+						const bool in = point
+							? (x >= left && y >= top && x < left + width && y < top + height)
+							: true;
+						if(!in)
+							continue;
+						host->Choose(i);
+						stats.chosen = i + 1;
+						clickedAt = now;
+						need = true;
+						mode = Mode::Need;
+						return;
+					}
+					return;
+				}
+				if(mode == Mode::Idle)
+				{
+					for(int i = 0; i < host->RegionCount(); i++)
+					{
+						int left = 0, top = 0, width = 0, height = 0;
+						if(!host->RegionRect(i, left, top, width, height))
+							continue;
+						const bool hit = point ? host->RegionHit(i, x, y)
+							: host->RegionHit(i, left + width / 2, top + height / 2);
+						if(!hit)
+							continue;
+						host->ActivateRegion(i);
+						stats.clicks++;
+						stats.regionClicks++;
+						clickedAt = now;
+						need = true;
+						mode = Mode::Need;
+						return;
+					}
+					return; // the idle screen: a click that hits nothing does nothing
+				}
+				if(mode == Mode::Page)
+				{
+					if(!revealed)
+					{
+						// the first click finishes the typing, the second advances
+						revealed = true;
+						revealStart = now - revealMs;
+						stats.completedReveals++;
+						stats.clicks++;
+						clickedAt = now;
+						return;
+					}
+					// one key-down buys one page: holding a key cannot skip
+					if(now - lastAdvanceAt < 60)
+						return;
+					stats.advances++;
+					stats.clicks++;
+					clickedAt = now;
+					lastAdvanceAt = now;
+					need = true;
+				}
+			};
+
 			SDL_Event event;
 			while(SDL_PollEvent(&event))
 			{
@@ -526,64 +597,18 @@ namespace artemis
 					if(event.key.keysym.sym == SDLK_ESCAPE)
 						quit = true;
 					else
+					{
 						HandleKey(event.key.keysym.sym);
+						if(event.key.keysym.sym == SDLK_SPACE ||
+							event.key.keysym.sym == SDLK_RETURN ||
+							event.key.keysym.sym == SDLK_KP_ENTER ||
+							event.key.keysym.sym == SDLK_z)
+							offerInput(false, 0, 0);
+					}
 				}
 				else if(event.type == SDL_MOUSEBUTTONDOWN &&
 					event.button.button == SDL_BUTTON_LEFT)
-				{
-					const int x = event.button.x;
-					const int y = event.button.y;
-					if(mode == Mode::Choice)
-					{
-						for(int i = 0; i < host->ChoiceCount(); i++)
-						{
-							int left = 0, top = 0, width = 0, height = 0;
-							if(!host->ChoiceRect(i, left, top, width, height))
-								continue;
-							if(x >= left && y >= top && x < left + width && y < top + height)
-							{
-								host->Choose(i);
-								stats.chosen = i + 1;
-								clickedAt = now;
-								need = true;
-								mode = Mode::Need;
-								break;
-							}
-						}
-					}
-					else if(mode == Mode::Idle)
-					{
-						for(int i = 0; i < host->RegionCount(); i++)
-							if(host->RegionHit(i, x, y))
-							{
-								host->ActivateRegion(i);
-								stats.clicks++;
-								clickedAt = now;
-								need = true;
-								mode = Mode::Need;
-								break;
-							}
-					}
-					else if(mode == Mode::Page && revealed)
-					{
-						if(now - lastAdvanceAt >= 60)
-						{
-							stats.advances++;
-							stats.clicks++;
-							clickedAt = now;
-							lastAdvanceAt = now;
-							need = true;
-						}
-					}
-					else if(mode == Mode::Page)
-					{
-						revealed = true;
-						revealStart = now - revealMs;
-						stats.completedReveals++;
-						stats.clicks++;
-						clickedAt = now;
-					}
-				}
+					offerInput(true, event.button.x, event.button.y);
 			}
 			const bool pumped = PumpScripted(now, need);
 			if(!pumped && options.quitWhenOutOfInput && scriptAt >= script.size())
@@ -640,6 +665,26 @@ namespace artemis
 						}
 						stats.sceneShot = options.shotScene;
 						stats.shots.push_back(options.shotScene);
+					}
+					if(!options.shotBackground.empty() && stats.backgroundShot.empty())
+					{
+						// the first page the game draws *over* a background: the still
+						// path's "real first screen" rule, in the window
+						bool hasBackground = false;
+						host->SetPageText(host->Reveal(fullText, revealMs), speaker);
+						host->Compose(canvas, now);
+						hasBackground = host->HasBackground();
+						if(hasBackground)
+						{
+							std::string shotError;
+							if(!Shot(options.shotBackground, shotError))
+							{
+								error = shotError;
+								return stats;
+							}
+							stats.backgroundShot = options.shotBackground;
+							stats.shots.push_back(options.shotBackground);
+						}
 					}
 					if(!options.shotDir.empty())
 					{
@@ -747,6 +792,9 @@ namespace artemis
 				1000.0 / (double)SDL_GetPerformanceFrequency());
 			const double frameUsed = (double)(frameWallEnd - frameWallStart);
 			frameTimes.push_back(frameUsed);
+			if(stats.lastFrameStamp >= 0)
+				frameIntervals.push_back((double)(frameWallStart - stats.lastFrameStamp));
+			stats.lastFrameStamp = frameWallStart;
 			stats.frames++;
 			if(virtualClock)
 			{
@@ -780,6 +828,8 @@ namespace artemis
 		stats.frameP95Ms = Percentile(frameTimes, 0.95);
 		stats.frameMaxMs = frameTimes.empty() ? 0
 			: *std::max_element(frameTimes.begin(), frameTimes.end());
+		stats.intervalP50Ms = Percentile(frameIntervals, 0.50);
+		stats.intervalP95Ms = Percentile(frameIntervals, 0.95);
 		if(!latencies.empty())
 		{
 			stats.latencyAvgMs = std::accumulate(latencies.begin(), latencies.end(), 0.0) /

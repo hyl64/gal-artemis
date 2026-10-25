@@ -693,16 +693,20 @@ namespace artemis
 			m_eventOrder++;
 		}
 
-		if(!block.lines.empty())
+		// the words through the source, so an external `lang_NNNNN` layout is a
+		// different source and not a different player
+		const std::vector<AstLine> lines = m_config.lines != nullptr
+			? m_config.lines->LinesFor(block) : block.lines;
+		if(!lines.empty())
 		{
 			page = PageText();
-			for(size_t i = 0; i < block.lines.size(); i++)
+			for(size_t i = 0; i < lines.size(); i++)
 			{
 				if(i > 0)
 					page.text += "\n";
-				page.text += block.lines[i].text;
+				page.text += lines[i].text;
 				if(page.speaker.empty())
-					page.speaker = block.lines[i].speaker;
+					page.speaker = lines[i].speaker;
 			}
 			hasPage = true;
 			m_stats.pages++;

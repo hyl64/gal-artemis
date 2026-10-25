@@ -127,6 +127,31 @@ namespace artemis
 	};
 
 	// -------------------------------------------------------------------------
+	// where a block's words come from
+	// -------------------------------------------------------------------------
+	//
+	// A chained .ast keeps its dialogue inline (`text = { ja = {...} }`).  The
+	// *other* shipped layout keeps it in a separate `lang_NNNNN` member named by
+	// the block's `lang` field, and `ParseLuaAst` says so in `LuaAst.notes` rather
+	// than guessing.  Reading a block's lines through this interface instead of
+	// straight out of `AstBlock::lines` is what keeps that second layout a matter
+	// of supplying a different source, not of changing the player: an external
+	// source gets the block (so it can see `block.lang`) and returns the lines.
+	class AstLineSource
+	{
+	public:
+		virtual ~AstLineSource() {}
+		virtual std::vector<AstLine> LinesFor(const AstBlock& block) = 0;
+	};
+
+	// The inline `ja` group: what this tree's corpus has.
+	class AstInlineLines : public AstLineSource
+	{
+	public:
+		std::vector<AstLine> LinesFor(const AstBlock& block) override { return block.lines; }
+	};
+
+	// -------------------------------------------------------------------------
 	// the run
 	// -------------------------------------------------------------------------
 	class AstRun
@@ -137,6 +162,9 @@ namespace artemis
 			AssetSource* assets = nullptr;
 			TextureCache* cache = nullptr;
 			Stage* stage = nullptr;
+			// Where the words come from.  nullptr = the inline `ja` group; a title
+			// whose dialogue lives in `lang_NNNNN` hands in its own source.
+			AstLineSource* lines = nullptr;
 			std::string startBlock; // "" = the chain head; else the block to start at
 			int maxBlocks = 0;      // 0 = the whole chain
 			int maxPages = 0;       // 0 = every page the script has

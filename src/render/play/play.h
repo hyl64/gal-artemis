@@ -80,6 +80,9 @@ namespace artemis
 		virtual void Compose(Canvas& canvas, int64_t nowMs) = 0;
 		// Called once per frame, after Compose, for anything that is not pixels.
 		virtual void OnFrame(int64_t nowMs) = 0;
+		// Whether the frame just composed has a decoded background behind the words:
+		// the same rule the still-frame run uses to decide a screen is "real".
+		virtual bool HasBackground() const { return true; }
 
 		// Click regions (the title screen's buttons).
 		virtual int RegionCount() const = 0;
@@ -124,6 +127,7 @@ namespace artemis
 		std::string shotDir;        // one PNG per phase change
 		std::string shotTitle;      // the idle screen's picture
 		std::string shotScene;      // the first page of the body
+		std::string shotBackground; // the first page that also has a background
 		int quitAfterPages = 0;     // 0 = run until the script ends
 		bool hashFrames = false;    // keep a hash of every frame, for a regression run
 		std::string capturePath;    // WAV, written when no device is open
@@ -148,6 +152,7 @@ namespace artemis
 		int clicks = 0;
 		int keys = 0;
 		int completedReveals = 0; // a click that finished the typing instead of advancing
+		int regionClicks = 0;     // clicks that hit a [button]/[point]
 		int advances = 0;
 		int regions = 0;
 		int choices = 0;
@@ -160,6 +165,9 @@ namespace artemis
 		double frameP50Ms = 0;
 		double frameP95Ms = 0;
 		double frameMaxMs = 0;
+		double intervalP50Ms = 0; // wall time between the starts of two frames
+		double intervalP95Ms = 0;
+		int64_t lastFrameStamp = -1;
 		double latencyAvgMs = 0; // click -> the next page composited
 		double latencyMaxMs = 0;
 		int latencySamples = 0;
@@ -185,6 +193,7 @@ namespace artemis
 		bool captured = false;
 		std::string titleShot;
 		std::string sceneShot;
+		std::string backgroundShot;
 		std::vector<std::string> shots;
 	};
 

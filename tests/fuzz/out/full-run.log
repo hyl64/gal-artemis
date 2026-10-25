@@ -15,3 +15,32 @@ pfs: 9 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
   peak 1024 KiB on input 42 (159 bytes, half-sjis, seed built-pf2-v2)
   peak 131072 KiB on input 112 (160 bytes, swap-ranges, seed built-pf2-v2)
   FINDING pfs-error-success-0149: an entry name contains a NUL (172 bytes, swap-ranges, seed built-pf8)
+  FINDING pfs-error-success-0177: an entry name contains a NUL (160 bytes, zero-range, seed built-pf2-v2)
+  ok 1157, rejected 3800, crash 0, timeout 0, oom 0, silent 0, error-success 43, bad-exception 0
+  slowest 161.3 ms, peak 131072 KiB
+  mutations: flip-bit=265 flip-bytes=280 truncate=247 truncate-tiny=282 insert-noise=269 delete-range=261 duplicate-range=280 swap-ranges=274 zero-range=233 fill-ff=279 length-times-ten=256 length-max=270 append-junk=269 negative-number=229 break-utf8=263 half-sjis=260 open-brackets=261 repeat-line=250 pure-random=272
+ast: 5 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
+  peak 0 KiB on input 0 (19 bytes, truncate-tiny, seed synthetic-chained)
+  peak 2 KiB on input 1 (173 bytes, fill-ff, seed synthetic-chained)
+  peak 217 KiB on input 2 (17199 bytes, open-brackets, seed script_オープニング続き)
+  peak 253 KiB on input 7 (41249 bytes, zero-range, seed d09_hy03)
+  peak 570 KiB on input 11 (64172 bytes, repeat-line, seed d01_c08_6)
+  peak 670 KiB on input 29 (64055 bytes, open-brackets, seed d01_c08_6)
+  peak 673 KiB on input 75 (66813 bytes, append-junk, seed d01_c08_6)
+  peak 868 KiB on input 86 (63707 bytes, repeat-line, seed d01_c08_6)
+  peak 868 KiB on input 358 (63676 bytes, zero-range, seed d01_c08_6)
+  peak 983 KiB on input 645 (67946 bytes, repeat-line, seed d01_c08_6)
+  peak 1181 KiB on input 2080 (85001 bytes, duplicate-range, seed d01_c08_6)
+  peak 1259 KiB on input 2917 (89782 bytes, duplicate-range, seed d01_c08_6)
+  peak 1426 KiB on input 3437 (101992 bytes, duplicate-range, seed d01_c08_6)
+  ok 950, rejected 4050, crash 0, timeout 0, oom 0, silent 0, error-success 0, bad-exception 0
+  slowest 153.6 ms, peak 1426 KiB
+  mutations: flip-bit=270 flip-bytes=284 truncate=228 truncate-tiny=251 insert-noise=258 delete-range=256 duplicate-range=274 swap-ranges=288 zero-range=262 fill-ff=252 length-times-ten=273 length-max=227 append-junk=246 negative-number=272 break-utf8=277 half-sjis=274 open-brackets=253 repeat-line=262 pure-random=293
+iet: 6 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
+  peak 6 KiB on input 0 (1845 bytes, truncate-tiny, seed macro)
+  peak 170 KiB on input 1 (34283 bytes, fill-ff, seed macro)
+  peak 280 KiB on input 4 (40558 bytes, repeat-line, seed scene)
+  peak 286 KiB on input 35 (45491 bytes, duplicate-range, seed scene)
+  peak 544 KiB on input 64 (61812 bytes, duplicate-range, seed scene)
+  peak 554 KiB on input 1589 (71155 bytes, duplicate-range, seed scene)
+  peak 557 KiB on input 4527 (71316 bytes, duplicate-range, seed scene)
