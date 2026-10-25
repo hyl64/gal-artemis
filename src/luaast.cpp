@@ -4,6 +4,7 @@
 #include "lua.h"
 
 #include <algorithm>
+#include <map>
 
 namespace artemis
 {
@@ -210,7 +211,24 @@ namespace artemis
 				std::vector<AstLine> notLines; // the voice group yields file names
 				ReadTextGroup(*vo, notLines, out.voices, true);
 			}
-			if(!text->field("ja") && !text->field("vo"))
+			// A third shape the arrayed layout uses: `text` is a dictionary keyed
+			// by the message index, and each value carries its own `ja` group
+			// (`text = { [8] = { name={name="悟"}, ja={ {"「…」"} } } }`).  Reading
+			// only the array shape is why this layout reported zero lines.
+			bool indexed = false;
+			for(const auto& entry : text->entries)
+			{
+				if(!entry.second.field("ja"))
+					continue;
+				indexed = true;
+				if(const LuaValue* vo = entry.second.field("vo"))
+				{
+					std::vector<AstLine> notLines;
+					ReadTextGroup(*vo, notLines, out.voices, true);
+				}
+				ReadTextGroup(*entry.second.field("ja"), out.lines, out.voices, false);
+			}
+			if(!indexed && !text->field("ja") && !text->field("vo"))
 				ReadTextGroup(*text, out.lines, out.voices, false);
 		}
 		if(const LuaValue* next = value.field("linknext"))
@@ -255,7 +273,50 @@ namespace artemis
 				ReadBlock(ast->items[i], "", block);
 				out.blocks.push_back(std::move(block));
 			}
+			// The dialogue itself sits beside the block array, in `ast.text`, keyed
+			// by message number: `[8] = { name={...}, ja={ {"「…」"} }, vo={...} }`.
+			// A block that carries a {"text"} command consumes the next message
+			// number, in block order, which is how the two tables line up.
+			const LuaValue* messages = ast->field("text");
 			size_t external = 0;
+			if(messages != nullptr && !messages->entries.empty())
+			{
+				std::map<long long, const LuaValue*> byIndex;
+				long long highest = 0;
+				for(const auto& e : messages->entries)
+				{
+					// A bracketed key `[8] = {...}` is recorded as "integer 8".
+					const std::string k = e.first.rfind("integer ", 0) == 0
+						? e.first.substr(8) : e.first;
+					char* end = nullptr;
+					const long long n = std::strtoll(k.c_str(), &end, 10);
+					if(end == nullptr || *end != '\0')
+						continue;
+					byIndex[n] = &e.second;
+					if(n > highest)
+						highest = n;
+				}
+				long long next = 1; // 1-based, matching the keys in the real files
+				for(AstBlock& b : out.blocks)
+				{
+					bool wantsText = false;
+					for(const AstCommand& c : b.commands)
+						if(c.name == "text")
+							wantsText = true;
+					if(!wantsText || next > highest)
+						continue;
+					const auto it = byIndex.find(next++);
+					if(it == byIndex.end())
+						continue;
+					if(const LuaValue* ja = it->second->field("ja"))
+						ReadTextGroup(*ja, b.lines, b.voices, false);
+					if(const LuaValue* vo = it->second->field("vo"))
+					{
+						std::vector<AstLine> notLines;
+						ReadTextGroup(*vo, notLines, b.voices, true);
+					}
+				}
+			}
 			for(const AstBlock& b : out.blocks)
 				if(!b.lang.empty() && b.lines.empty())
 					external++;

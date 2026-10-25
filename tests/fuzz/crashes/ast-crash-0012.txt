@@ -1,0 +1,9 @@
+parser:   ast
+finding:  crash
+detail:   killed by Illegal instruction: 4
+signal:   4
+input:    11376 bytes
+seed:     /Users/huangyuliang/Documents/gal-engines/artemis/../testdata/artemis-raspberry-web/samples/script_オープニング続き.ast
+mutation: deep-nest
+rng:      1 (input index 12)
+repro:    ./build/fuzz repro crashes/ast-crash-0012.bin ast

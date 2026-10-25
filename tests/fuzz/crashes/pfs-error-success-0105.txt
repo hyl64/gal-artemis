@@ -1,0 +1,9 @@
+parser:   pfs
+finding:  error-success
+detail:   an entry name contains a NUL
+signal:   0
+input:    172 bytes
+seed:     built-pf9
+mutation: zero-range
+rng:      1 (input index 105)
+repro:    ./build/fuzz repro crashes/pfs-error-success-0105.bin pfs

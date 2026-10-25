@@ -1,0 +1,9 @@
+parser:   ast
+finding:  crash
+detail:   killed by Illegal instruction: 4
+signal:   4
+input:    11336 bytes
+seed:     synthetic-chained
+mutation: deep-nest
+rng:      1 (input index 29)
+repro:    ./build/fuzz repro crashes/ast-crash-0029.bin ast

@@ -1,0 +1,2280 @@
+astver = 2.0
+ast = {
+	block_00000 = {
+		{"savetitle", text="CLIFFHANGER."},
+		{"bg", x=-630, y=0, blur=5, time=50, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"se", id=9, loop=1, file="am_naka"},
+		{"fg", ch="柊一郎", size="z1", time=50, mode=3, resize=1, path=":fg/shu/z1/", file="shu_z1c0110", brow="c_brow0003", eyes="c_eyes0037", lips="c_lips0003", head="shu_z1c", lv=4, id=0},
+		{"fg", ch="水城", mode=1, path=":fg/miz/no/", file="miz_noa0400", bang="a0076", brow="a_brow0005", eyes="a_eyes0013", lips="a_lips0005", head="miz_noa", lv=3, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0004", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「制作は中止です」",
+					{"rt2"},
+				},
+			},
+		},
+		linknext = "block_00001",
+		line = 14,
+	},
+	block_00001 = {
+		{"se", id=1, file="kinu6"},
+		{"fg", ch="柊一郎", time=500, mode=3, path=":fg/shu/z1/", file="shu_z1c0100", brow="c_brow0003", eyes="c_eyes0005", lips="c_lips0002", head="shu_z1c", lv=4, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「………………」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00000",
+		linknext = "block_00002",
+		line = 20,
+	},
+	block_00002 = {
+		{"fg", ch="柊一郎", mode=3, path=":fg/shu/z1/", file="shu_z1c0100", brow="c_brow0002", eyes="c_eyes0004", lips="c_lips0002", head="shu_z1c", lv=4, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「……どういうことですか？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00001",
+		linknext = "block_00003",
+		line = 24,
+	},
+	block_00003 = {
+		{"mbgm", file="bgm12a,bgm12b", default="bgm12a"},
+		{"se", id=1, file="fs1_yu"},
+		{"bg", blur=5, time=500, sync=0, file="bg24c", path=":bg/"},
+		{"fg", ch="夕顔", size="z1", time=500, mode=3, resize=1, path=":fg/yug/z1/", file="yug_z1a0900", bang="a0076", brow="a_brow0005", eyes="a_eyes0001", lips="a_lips0005", head="yug_z1a", lv=4, id=5},
+		{"fgact", ch="夕顔", act="振動下", size=10, time=500, lv=4, id=5},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="yougao0002", ch="YOUGAO"},
+			},
+			ja = {
+				{
+					name = {"夕顔"},
+					"「はぁ……貴様は、ない頭を少しは使って考えてごらんなさい。こんなゲーム、このプリズンで作っていいはずがないでしょう？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00002",
+		linknext = "block_00004",
+		line = 35,
+	},
+	block_00004 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ついている杖を高圧的に鳴らす女刑務官は、冷たくそう言った。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00003",
+		linknext = "block_00005",
+		line = 39,
+	},
+	block_00005 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"夕顔葉月看守長。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00004",
+		linknext = "block_00006",
+		line = 41,
+	},
+	block_00006 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"重大犯罪房の長にして、チューリップ・プリズンの警備すべてを束ねる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00005",
+		linknext = "block_00007",
+		line = 43,
+	},
+	block_00007 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"このプリズンでもっとも逆らってはならない人間の、ひとり。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00006",
+		linknext = "block_00008",
+		line = 45,
+	},
+	block_00008 = {
+		{"bg", x=-600, y=0, blur=5, time=300, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=300, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="柊一郎", size="z1", time=300, mode=3, path=":fg/shu/z1/", file="shu_z1c0100", brow="c_brow0002", eyes="c_eyes0025", lips="c_lips0002", head="shu_z1c", x=430, lv=4, id=0},
+		{"cgact", act="移動", x=-40, time=20000, ease="none"},
+		{"fgact", ch="柊一郎", act="移動", x=70, time=20000, ease="none", lv=4, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「…………え？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00007",
+		linknext = "block_00009",
+		line = 54,
+	},
+	block_00009 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"けれど狐につままれたようで、理解できなかった。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00008",
+		linknext = "block_00010",
+		line = 56,
+	},
+	block_00010 = {
+		{"fg", ch="柊一郎", mode=3, path=":fg/shu/z1/", file="shu_z1c0100", brow="c_brow0002", eyes="c_eyes0005", lips="c_lips0002", head="shu_z1c", lv=4, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「これは……許可を取って制作した成果物です」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00009",
+		linknext = "block_00011",
+		line = 60,
+	},
+	block_00011 = {
+		{"bg", x=500, y=300, time=1000, blur=5, rotate=-3, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="夕顔", time=1000, rotate=-6, zoom=90, size="z2", mode=3, resize=1, path=":fg/yug/z2/", file="yug_z2a0900", bang="a0076", brow="a_brow0008", eyes="a_eyes0022", lips="a_lips0008", head="yug_z2a", x=-50, y=-100, lv=5, id=5},
+		{"cgact", act="移動", x=30, y=10, time=30000, ease="none"},
+		{"fgact", ch="夕顔", act="移動", x=-50, y=20, time=30000, ease="none", lv=5, id=5},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="yougao0003", ch="YOUGAO"},
+			},
+			ja = {
+				{
+					name = {"夕顔"},
+					"「このチューリップ・プリズンで、まさかアダルトを作っていいはずだなんて、本気でそう考えたのかしら？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00010",
+		linknext = "block_00012",
+		line = 69,
+	},
+	block_00012 = {
+		{"bg", x=-640, y=0, zoom=110, blur=5, time=300, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=300, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="柊一郎", size="z2", time=300, mode=3, resize=1, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0003", eyes="c_eyes0019", lips="c_lips0003", head="shu_z2c", x=500, y=-500, lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「シコレンコ看守長の認可を得ています」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00011",
+		linknext = "block_00013",
+		line = 76,
+	},
+	block_00013 = {
+		{"se", id=1, file="fs1_so"},
+		{"bg", x=500, y=100, zoom=90, blur=5, time=300, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=300, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="ソフィーヤ", ex01="a0082", size="no", time=300, mode=3, path=":fg/sof/no/", file="sof_noa0900", bang="a0076", brow="a_brow0018", eyes="a_eyes0002", lips="a_lips0018", head="sof_noa", x=-500, lv=3, id=4},
+		{"fgact", ch="ソフィーヤ", act="振動下", size=10, time=300, lv=3, id=4},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="sophia0655", ch="SOPHIA"},
+			},
+			ja = {
+				{
+					name = {"ソフィーヤ"},
+					"「えっと、そのぉ……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00012",
+		linknext = "block_00014",
+		line = 86,
+	},
+	block_00014 = {
+		{"se", id=1, file="fs1_yu"},
+		{"se", id=2, file="kinu_yu2"},
+		{"fg", ch="夕顔", time=300, mode=3, path=":fg/yug/z2/", file="yug_z2a0900", bang="a0076", brow="a_brow0005", eyes="a_eyes0013", lips="a_lips0005", head="yug_z2a", x=600, y=-200, lv=5, id=5},
+		{"text"},
+		delay = {
+			vl01 = {
+				{"fg", ch="夕顔", mode=3, path=":fg/yug/z2/", file="yug_z2a0900", bang="a0076", brow="a_brow0008", eyes="a_eyes0022", lips="a_lips0008", head="yug_z2a", lv=5, id=5},
+			},
+		},
+		text = {
+			vo = {
+				{"vo", file="yougao0004", ch="YOUGAO"},
+			},
+			ja = {
+				{
+					name = {"夕顔"},
+					"「ソフィーヤ、裸婦に関しては芸術性がないものは許さないと言っておいたはずよ？　これはどういうことかしら？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00013",
+		linknext = "block_00015",
+		line = 95,
+	},
+	block_00015 = {
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="sophia0656", ch="SOPHIA"},
+			},
+			ja = {
+				{
+					name = {"ソフィーヤ"},
+					"「すっ、すみませ……誠に、ごめ……申し訳ございません……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00014",
+		linknext = "block_00016",
+		line = 100,
+	},
+	block_00016 = {
+		{"se", id=1, file="kinu_so2"},
+		{"fg", ch="ソフィーヤ", mode=3, path=":fg/sof/no/", file="sof_noa0900", bang="a0076", brow="a_brow0010", eyes="a_eyes0055", lips="a_lips0010", ex01="a0082", head="sof_noa", lv=3, id=4},
+		{"fgact", ch="ソフィーヤ", act="振動下", size=10, time=100, lv=3, id=4},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"左奥のソフりんが、青白い顔で縮こまっている。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00015",
+		linknext = "block_00017",
+		line = 107,
+	},
+	block_00017 = {
+		{"bgtstop"},
+		{"fg", ch="ソフィーヤ", mode=3, path=":fg/sof/no/", file="sof_noa0900", bang="a0076", brow="a_brow0010", eyes="a_eyes0028", lips="a_lips0010", ex01="a0082", head="sof_noa", lv=3, id=4},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="sophia0657", ch="SOPHIA"},
+			},
+			ja = {
+				{
+					name = {"ソフィーヤ"},
+					"「です、が……これは、その……あの……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00016",
+		linknext = "block_00018",
+		line = 113,
+	},
+	block_00018 = {
+		{"chmbgm", file="bgm12b", time=1000},
+		{"bg", x=-590, y=0, zoom=100, blur=5, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="柊一郎", size="z2", time=300, mode=3, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0007", eyes="c_eyes0019", lips="c_lips0004", head="shu_z2c", x=400, y=-250, lv=5, id=0},
+		{"cgact", act="移動", x=50, time=20000, ease="none"},
+		{"fgact", ch="柊一郎", act="移動", x=100, time=20000, ease="none", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「芸術性ならあります」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00017",
+		linknext = "block_00019",
+		line = 124,
+	},
+	block_00019 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「これはエロいだけではなく、HENTAIの意義や性癖を世間に問いかけるものなんです」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00018",
+		linknext = "block_00020",
+		line = 127,
+	},
+	block_00020 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"なんの考えもなしに、エロくしようと思ったわけじゃない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00019",
+		linknext = "block_00021",
+		line = 129,
+	},
+	block_00021 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ゲームを作った今なら、この作品の意図を説明できる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00020",
+		linknext = "block_00022",
+		line = 131,
+	},
+	block_00022 = {
+		{"fg", ch="柊一郎", mode=3, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0009", eyes="c_eyes0025", lips="c_lips0009", head="shu_z2c", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「異常性癖と呼ばれる人間の位置関係を逆転させ、すべての理解を促そうと――」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00021",
+		linknext = "block_00023",
+		line = 135,
+	},
+	block_00023 = {
+		{"chmbgm", vol=0, time=500, file="bgm12b"},
+		{"se", id=1, file="chair_sofa2"},
+		{"bg", x=640, y=-300, zoom=130, blur=10, time=500, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=500, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="水城", size="z2", time=500, mode=3, resize=1, path=":fg/miz/z2/", file="miz_z2a0400", bang="a0076", brow="a_brow0004", eyes="a_eyes0010", lips="a_lips0004", head="miz_z2a", y=-1000, lv=5, id=10},
+		{"fgact", ch="水城", act="振動下", size=10, time=500, lv=5, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0005", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「だからと言って、露骨な性行為シーンは許されません」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00022",
+		linknext = "block_00024",
+		line = 146,
+	},
+	block_00024 = {
+		{"cgact", act="移動", y=700, time=10000, ease="none"},
+		{"fgact", ch="水城", act="移動", y=800, time=10000, ease="none", lv=5, id=10},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"この部屋の中央。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00023",
+		linknext = "block_00025",
+		line = 153,
+	},
+	block_00025 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"中心に添えられた格式高い椅子に座る初老の女性は、はっきりと言った。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00024",
+		linknext = "block_00026",
+		line = 155,
+	},
+	block_00026 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"チューリップ・プリズンの長――水城刑務所長。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00025",
+		linknext = "block_00027",
+		line = 157,
+	},
+	block_00027 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ここでもっとも権力を持つ人間だった。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00026",
+		linknext = "block_00028",
+		line = 159,
+	},
+	block_00028 = {
+		{"bgm", file="bgm22"},
+		{"se", id=1, file="paper_pera"},
+		{"bg", x=640, y=0, zoom=100, blur=10, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="水城", size="z1", time=1000, mode=3, resize=1, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0005", eyes="a_eyes0004", lips="a_lips0005", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0006", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「しかもこんなチラシなどで宣伝している現状、本プロジェクトは内外から注目が集まっています。なおさら完成させるわけにはいきません」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00027",
+		linknext = "block_00029",
+		line = 168,
+	},
+	block_00029 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"なにがなんだか、オレにはさっぱり分からなかった。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00028",
+		linknext = "block_00030",
+		line = 170,
+	},
+	block_00030 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"突然現れた話したこともないような人々が、このゲームを取り上げようとしている。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00029",
+		linknext = "block_00031",
+		line = 172,
+	},
+	block_00031 = {
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0002", eyes="c_eyes0019", lips="c_lips0002", mw="mw", head="shu_z2c", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「それはオレたちがやったことじゃない」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00030",
+		linknext = "block_00032",
+		line = 176,
+	},
+	block_00032 = {
+		{"fg", ch="水城", mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0008", eyes="a_eyes0022", lips="a_lips0004", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0007", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「それでも現実は、現実です」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00031",
+		linknext = "block_00033",
+		line = 180,
+	},
+	block_00033 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"そんなことがなぜできると思っているのか、理解できなかった。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00032",
+		linknext = "block_00034",
+		line = 182,
+	},
+	block_00034 = {
+		{"bg", x=-590, y=400, zoom=100, blur=5, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="柊一郎", size="z2", time=300, mode=3, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0007", eyes="c_eyes0019", lips="c_lips0004", head="shu_z2c", x=400, y=500, lv=5, id=0},
+		{"cgact", act="移動", x=50, time=20000, ease="none"},
+		{"fgact", ch="柊一郎", act="移動", x=100, time=20000, ease="none", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「――――――」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00033",
+		linknext = "block_00035",
+		line = 191,
+	},
+	block_00035 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"なぜだ？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00034",
+		linknext = "block_00036",
+		line = 193,
+	},
+	block_00036 = {
+		{"bg", x=640, y=0, blur=10, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="水城", size="z1", time=1000, mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0008", eyes="a_eyes0013", lips="a_lips0005", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0008", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「大体なぜモザイクが入っていないのです。仮にこのまま配布していたら、大問題になっていましたよ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00035",
+		linknext = "block_00037",
+		line = 200,
+	},
+	block_00037 = {
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="yougao0005", ch="YOUGAO"},
+			},
+			ja = {
+				{
+					name = {"夕顔"},
+					"「なぜちゃんとチェックしなかったのかしら、ソフィーヤ？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00036",
+		linknext = "block_00038",
+		line = 203,
+	},
+	block_00038 = {
+		{"se", id=1, file="fs1_yu"},
+		{"bg", time=300, sync=0, file="bg24c", path=":bg/"},
+		{"bg", time=300, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="夕顔", size="no", lv=6, time=300, mode=3, resize=1, path=":fg/yug/no/", file="yug_noa0900", bang="a0076", brow="a_brow0009", eyes="a_eyes0013", lips="a_lips0009", head="yug_noa", x=-200, y=60, id=5},
+		{"fgact", ch="夕顔", act="振動下", size=5, time=300, lv=6, id=5},
+		{"fg", ch="ソフィーヤ", lv=5, size="no", time=300, mode=3, path=":fg/sof/no/", file="sof_noa0900", bang="a0076", brow="a_brow0010", eyes="a_eyes0008", lips="a_lips0005", ex01="a0082", head="sof_noa", id=4},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"オレは露出狂だ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00037",
+		linknext = "block_00039",
+		line = 213,
+	},
+	block_00039 = {
+		{"bgtstop"},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="juria0024", ch="JURIA"},
+			},
+			ja = {
+				{
+					name = {"樹里亜"},
+					"「ちゃんとチェックするのがあなたの仕事でしょう、ソフりんちゃん？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00038",
+		linknext = "block_00040",
+		line = 218,
+	},
+	block_00040 = {
+		{"se", id=1, file="kinu_ju"},
+		{"fg", ch="樹里亜", size="no", lv=4, zoom=90, time=300, mode=3, path=":fg/jur/no/", file="jur_noa0900", bang="a0076", brow="a_brow0005", eyes="a_eyes0016", lips="a_lips0005", head="jur_noa", x=200, y=50, id=6},
+		{"fgact", ch="樹里亜", act="移動", x=10, time=500, lv=4, id=6},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"イチモツを見せることを最大の喜びとする。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00039",
+		linknext = "block_00041",
+		line = 225,
+	},
+	block_00041 = {
+		{"bgtstop"},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="sophia0658", ch="SOPHIA"},
+			},
+			ja = {
+				{
+					name = {"ソフィーヤ"},
+					"「ぁ……ぅ……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00040",
+		linknext = "block_00042",
+		line = 230,
+	},
+	block_00042 = {
+		{"fg", ch="ソフィーヤ", mode=3, path=":fg/sof/no/", file="sof_noa0900", bang="a0076", brow="a_brow0010", eyes="a_eyes0055", lips="a_lips0010", ex01="a0082", head="sof_noa", lv=5, id=4},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"モザイクなんて、かけられるはずがない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00041",
+		linknext = "block_00043",
+		line = 234,
+	},
+	block_00043 = {
+		{"bg", x=-590, y=400, zoom=100, blur=5, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="柊一郎", size="z2", time=300, mode=3, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0007", eyes="c_eyes0019", lips="c_lips0004", head="shu_z2c", x=400, y=500, lv=5, id=0},
+		{"cgact", act="移動", x=50, time=20000, ease="none"},
+		{"fgact", ch="柊一郎", act="移動", x=100, time=20000, ease="none", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「そんなまやかしのものに、なんの必要がある？」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00042",
+		linknext = "block_00044",
+		line = 243,
+	},
+	block_00044 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"意味が分からない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00043",
+		linknext = "block_00045",
+		line = 245,
+	},
+	block_00045 = {
+		{"bgm", stop=1, time=2000},
+		{"bg", time=1000, sync=0, file="black", path=":bg/"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"すべてがすべて、意味が分からない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00044",
+		linknext = "block_00046",
+		line = 250,
+	},
+	block_00046 = {
+		{"bg", x=640, y=0, blur=10, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="水城", size="z1", time=1000, mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0008", eyes="a_eyes0013", lips="a_lips0005", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0009", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「あなたには19班のリーダーとして、相応の責任をとってもらわなくてはなりません」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00045",
+		linknext = "block_00047",
+		line = 257,
+	},
+	block_00047 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうしてなんだ？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00046",
+		linknext = "block_00048",
+		line = 259,
+	},
+	block_00048 = {
+		{"fg", ch="水城", mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0004", eyes="a_eyes0010", lips="a_lips0004", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0010", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「わいせつ房0720番に、本件の処罰を言い伝えます」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00047",
+		linknext = "block_00049",
+		line = 263,
+	},
+	block_00049 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうして、こうなってしまう？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00048",
+		linknext = "block_00050",
+		line = 265,
+	},
+	block_00050 = {
+		{"fg", ch="水城", mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0007", eyes="a_eyes0013", lips="a_lips0007", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0011", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「あなたはチューリップ・プリズンの禁忌とされる性的行為を助長する作品を作り出し、間接的性行為をおこない――」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00049",
+		linknext = "block_00051",
+		line = 269,
+	},
+	block_00051 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうして、分からないんだ？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00050",
+		linknext = "block_00052",
+		line = 271,
+	},
+	block_00052 = {
+		{"bgm", file="bgm29"},
+		{"se", id=1, file="kinu6"},
+		{"bg", x=0, zoom=60, blur=10, time=1000, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360, y=0},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="水城", size="z1", zoom=60, time=1000, mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0004", eyes="a_eyes0010", lips="a_lips0005", head="miz_z1a", lv=4, id=10},
+		{"fg", ch="夕顔", size="z2", zoom=65, time=1000, mode=3, resize=1, path=":fg/yug/z2/", file="yug_z2a0900", bang="a0076", brow="a_brow0009", eyes="a_eyes0025", lips="a_lips0011", head="yug_z2a", x=-600, y=-200, lv=5, id=5},
+		{"fg", ch="樹里亜", size="z2", zoom=55, time=1000, mode=3, resize=1, path=":fg/jur/z2/", file="jur_z2a0900", bang="a0076", brow="a_brow0001", eyes="a_eyes0001", lips="a_lips0003", head="jur_z2a", x=700, y=-100, lv=5, id=6},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2a0100", brow="a_brow0003", eyes="a_eyes0023", lips="a_lips0001", mw="mw", head="shu_z2a", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「……オレは見つけたんだ、自分の世界を」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00051",
+		linknext = "block_00053",
+		line = 287,
+	},
+	block_00053 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"cgact", act="移動", zoom=65, time=800, ease="none"},
+		{"fgact", ch="水城", act="移動", zoom=65, time=800, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="移動", x=-100, zoom=70, time=800, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="移動", x=100, zoom=60, time=800, ease="none", lv=5, id=6},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=6},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうして、理解してくれない？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00052",
+		linknext = "block_00054",
+		line = 301,
+	},
+	block_00054 = {
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0011", eyes="b_eyes0032", lips="b_lips0011", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「自分だけができる表現方法を見つけたんだ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00053",
+		linknext = "block_00055",
+		line = 305,
+	},
+	block_00055 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"cgact", act="移動", zoom=70, time=800, ease="none"},
+		{"fgact", ch="水城", act="移動", zoom=70, time=800, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="移動", x=-100, zoom=75, time=800, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="移動", x=100, zoom=65, time=800, ease="none", lv=5, id=6},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=6},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうして、オレたちの存在を無視しようとする？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00054",
+		linknext = "block_00056",
+		line = 319,
+	},
+	block_00056 = {
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0001", eyes="b_eyes0002", lips="b_lips0002", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「自分自身を表す術を、見つけたんだ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00055",
+		linknext = "block_00057",
+		line = 323,
+	},
+	block_00057 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"cgact", act="移動", zoom=75, time=800, ease="none"},
+		{"fgact", ch="水城", act="移動", zoom=75, time=800, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="移動", x=-100, zoom=80, time=800, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="移動", x=100, zoom=70, time=800, ease="none", lv=5, id=6},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=6},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どうして、また。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00056",
+		linknext = "block_00058",
+		line = 337,
+	},
+	block_00058 = {
+		{"se", id=1, file="simeru"},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0004", eyes="b_eyes0011", lips="b_lips0011", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「それを貴様らに奪えるはずがないのに……！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00057",
+		linknext = "block_00059",
+		line = 343,
+	},
+	block_00059 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"cgact", act="移動", zoom=80, time=800, ease="none"},
+		{"fgact", ch="水城", act="移動", zoom=80, time=800, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="移動", x=-100, zoom=85, time=800, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="移動", x=100, zoom=75, time=800, ease="none", lv=5, id=6},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"fgact", ch="夕顔", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=5},
+		{"fgact", ch="樹里亜", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=6},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"またオレから、オレを取り上げようとする？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00058",
+		linknext = "block_00060",
+		line = 357,
+	},
+	block_00060 = {
+		{"se", id=1, file="simeru2"},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0004", eyes="b_eyes0011", lips="b_lips0004", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「そんな権利が、あるはずないのに――！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00059",
+		linknext = "block_00061",
+		line = 363,
+	},
+	block_00061 = {
+		{"se", id=1, file="yubi"},
+		{"bg", x=500, y=100, zoom=90, blur=5, time=100, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360, mx=40},
+		{"bg", time=100, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"fg", ch="夕顔", time=100, mx=-40, mode=3, path=":fg/yug/z2/", file="yug_z2a0900", bang="a0076", brow="a_brow0005", eyes="a_eyes0013", lips="a_lips0005", head="yug_z2a", x=600, y=-200, lv=5, id=5},
+		{"text"},
+		delay = {
+			vl01 = {
+				{"se", id=2, file="kinu_kansyu3"},
+				{"fg", ch="夏海", size="no", time=200, mode=3, path=":fg/oot/no/", file="oot_noa0900", bang="a0076", brow="a_brow0001", eyes="a_eyes0001", lips="a_lips0001", head="oot_noa", x=-500, y=-300, lv=3, id=13},
+				{"fgact", ch="夏海", act="移動", y=300, time=100, ease="none", lv=3, id=13},
+				{"fgact", ch="夏海", act="振動下", size=10, time=200, lv=3, id=13},
+			},
+			vl02 = {
+				{"se", id=1, file="kinu_kansyu3"},
+				{"fg", ch="真城", size="no", time=200, mode=3, path=":fg/sak/no/", file="sak_noa0900", bang="a0076", brow="a_brow0001", eyes="a_eyes0001", lips="a_lips0001", head="sak_noa", x=-200, y=-300, lv=3, id=14},
+				{"fgact", ch="真城", act="移動", y=300, time=100, ease="none", lv=3, id=14},
+				{"fgact", ch="真城", act="振動下", size=10, time=200, lv=3, id=14},
+			},
+		},
+		text = {
+			vo = {
+				{"vo", file="yougao0006", ch="YOUGAO"},
+			},
+			ja = {
+				{
+					name = {"夕顔"},
+					"「夏海、逆茂木」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00060",
+		linknext = "block_00062",
+		line = 386,
+	},
+	block_00062 = {
+		{"bg", x=0, y=-300, blur=5, time=200, sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360, zoom=90},
+		{"bg", time=200, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"cgact", act="浮遊", size=35, time=30, loop=5},
+		{"se", id=1, file="act_taoreru"},
+		{"se", id=2, file="act_hurimawasu3"},
+		{"se", id=3, file="hit_metal"},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="natsumi0007", ch="NATSUMI"},
+				{"vo", file="mashiro0001", ch="MASHIRO"},
+			},
+			ja = {
+				{
+					name = {"特別警備隊"},
+					"「――――――ッ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00061",
+		linknext = "block_00063",
+		line = 398,
+	},
+	block_00063 = {
+		{"se", id=1, file="rope6"},
+		{"cgact", act="浮遊横", size=1, time=50, loop=-1},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"なぜオレたちから、すべてを奪おうとする？",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00062",
+		linknext = "block_00064",
+		line = 405,
+	},
+	block_00064 = {
+		{"se", id=1, file="kinu_syuuzin"},
+		{"se", id=2, file="fs1_syuuzin"},
+		{"cgact", act="移動", y=400, time=2000, ease="none"},
+		{"fg", ch="柊一郎", ex03="c0084", mode=1, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0001", eyes="c_eyes0019", lips="c_lips0011", mw="mw", head="shu_z2c", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「それを返してくれ……！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00063",
+		linknext = "block_00065",
+		line = 414,
+	},
+	block_00065 = {
+		{"se", id=1, file="rope7"},
+		{"se", id=2, file="kinu6"},
+		{"fg", ch="�海", size="z2", time=300, mode=3, resize=1, path=":fg/oot/z2/", file="oot_z2a0900", bang="a0076", brow="a_brow0004", eyes="a_eyes0010", lips="a_lips0004", head="oot_z2a", x=700, y=-300, lv=5, id=13},
+		{"fgact", ch="夏海", act="浮遊横", size=1, time=50, loop=-1, lv=5, id=13},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="natsumi0008", ch="NATSUMI"},
+			},
+			ja = {
+				{
+					name = {"夏海"},
+					"「………………っ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00064",
+		linknext = "block_00066",
+		line = 425,
+	},
+	block_00066 = {
+		{"se", id=1, file="rope8"},
+		{"se", id=2, file="kinu5"},
+		{"fg", ch="真城", size="z2", time=300, mode=3, resize=1, path=":fg/sak/z2/", file="sak_z2a0900", bang="a0076", brow="a_brow0007", eyes="a_eyes0019", lips="a_lips0007", head="sak_z2a", x=-700, y=-300, lv=5, id=14},
+		{"fgact", ch="真城", act="浮遊横", size=1, time=50, loop=-1, lv=5, id=14},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mashiro0002", ch="MASHIRO"},
+			},
+			ja = {
+				{
+					name = {"真城", "滑舌の悪い警備隊員"},
+					"「ちから、が……な……っ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00065",
+		linknext = "block_00067",
+		line = 434,
+	},
+	block_00067 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"se", id=2, file="kinu_kansyu"},
+		{"cgact", act="移動", zoom=105, time=800, ease="none"},
+		{"fgact", ch="真城", act="移動", x=-100, zoom=105, time=800, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="移動", x=100, zoom=105, time=800, ease="none", lv=5, id=13},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="真城", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=13},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0011", eyes="b_eyes0031", lips="b_lips0011", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「オレに返してくれ！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00066",
+		linknext = "block_00068",
+		line = 449,
+	},
+	block_00068 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"se", id=2, file="kinu_kansyu"},
+		{"cgact", act="移動", zoom=110, time=800, ease="none"},
+		{"fgact", ch="真城", act="移動", x=-100, zoom=110, time=800, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="移動", x=100, zoom=110, time=800, ease="none", lv=5, id=13},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="真城", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=13},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"返してくれ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00067",
+		linknext = "block_00069",
+		line = 462,
+	},
+	block_00069 = {
+		{"fg", ch="夏海", blur=10, time=500, mode=3, path=":fg/oot/z2/", file="oot_z2a0900", bang="a0076", brow="a_brow0004", eyes="a_eyes0010", lips="a_lips0004", head="oot_z2a", lv=5, id=13},
+		{"fg", ch="真城", blur=10, time=500, mode=3, path=":fg/sak/z2/", file="sak_z2a0900", bang="a0076", brow="a_brow0007", eyes="a_eyes0019", lips="a_lips0007", head="sak_z2a", lv=5, id=14},
+		{"fg", ch="水城", size="z1", zoom=80, time=500, mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0008", eyes="a_eyes0022", lips="a_lips0003", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0012", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「よってPC内のデータは没収、優等受刑者および二等者囚人を剥奪し、本ゲームは削除」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00068",
+		linknext = "block_00070",
+		line = 468,
+	},
+	block_00070 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"se", id=2, file="kinu_kansyu"},
+		{"cgact", act="移動", zoom=115, time=800, ease="none"},
+		{"fgact", ch="真城", act="移動", x=-100, zoom=115, time=800, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="移動", x=100, zoom=115, time=800, ease="none", lv=5, id=13},
+		{"fgact", ch="水城", act="移動", zoom=85, time=800, ease="none", lv=4, id=10},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="真城", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=13},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0006", eyes="b_eyes0016", lips="b_lips0006", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「返せ！！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00069",
+		linknext = "block_00071",
+		line = 485,
+	},
+	block_00071 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"お前たちに、そんな権利なんてない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00070",
+		linknext = "block_00072",
+		line = 487,
+	},
+	block_00072 = {
+		{"fg", ch="水城", mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0008", eyes="a_eyes0013", lips="a_lips0003", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0013", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「そして、反抗的かつ高圧的な態度を見せた受刑者に対し――」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00071",
+		linknext = "block_00073",
+		line = 491,
+	},
+	block_00073 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"se", id=2, file="kinu_kansyu"},
+		{"cgact", act="移動", zoom=120, time=800, ease="none"},
+		{"fgact", ch="真城", act="移動", x=-100, zoom=120, time=800, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="移動", x=100, zoom=120, time=800, ease="none", lv=5, id=13},
+		{"fgact", ch="水城", act="移動", zoom=90, time=800, ease="none", lv=4, id=10},
+		{"cgact", act="振動下", size=10, time=400, loop=1, ease="none"},
+		{"fgact", ch="真城", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=14},
+		{"fgact", ch="夏海", act="振動下", size=10, time=400, loop=1, ease="none", lv=5, id=13},
+		{"fgact", ch="水城", act="振動下", size=10, time=400, loop=1, ease="none", lv=4, id=10},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"だからオレに、返してくれ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00072",
+		linknext = "block_00074",
+		line = 506,
+	},
+	block_00074 = {
+		{"se", id=1, file="fs1_syuuzin"},
+		{"se", id=2, file="kinu_kansyu"},
+		{"se", id=3, file="huku2"},
+		{"cgact", act="浮遊", size=20, time=30, loop=5},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0008", eyes="c_eyes0022", lips="c_lips0008", ex03="c0084", mw="mw", head="shu_z2c", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					{"exfont", size="f4"},
+					"「やめろ！！！！」",
+					{"exfont"},
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00073",
+		linknext = "block_00075",
+		line = 515,
+	},
+	block_00075 = {
+		{"bgm", stop=1, time=1000},
+		{"fg", ch="水城", mode=3, path=":fg/miz/z1/", file="miz_z1a0400", bang="a0076", brow="a_brow0009", eyes="a_eyes0025", lips="a_lips0009", head="miz_z1a", lv=4, id=10},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="mizushiro0014", ch="MIZUSHIRO"},
+			},
+			ja = {
+				{
+					name = {"水城"},
+					"「――15日間の懲罰房行きを、ここに命じます」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00074",
+		linknext = "block_00076",
+		line = 521,
+	},
+	block_00076 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"すべてをすべて、返してくれ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00075",
+		linknext = "block_00077",
+		line = 523,
+	},
+	block_00077 = {
+		{"cgdel", id=-1, sync=0},
+		{"bg", style="reset", sync=0, file="zbg24c", path=":bg/", ax=1440, ay=810, bx=-640, by=-360},
+		{"fg", time=2000, mode=-2, sync=0},
+		{"colortone", style="reset"},
+		{"se", stop=1, id=-1, time=1000},
+		{"bgm", stop=1, time=1000},
+		{"mbgmstop", time=1000},
+		{"bgtstop"},
+		{"bg", time=2000, rule="216r", file="black", path=":bg/"},
+		{"cacheclear"},
+		{"ex", func="wait", time=3000},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="erodu0130", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「…………ぅ…………ぅう……ぅ……っ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00076",
+		linknext = "block_00078",
+		line = 533,
+	},
+	block_00078 = {
+		{"bgm", file="bgm12a"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ここは懲罰房。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00077",
+		linknext = "block_00079",
+		line = 537,
+	},
+	block_00079 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"光の差し込まぬ、罪人よりも堕ちた咎人が収容される場所。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00078",
+		linknext = "block_00080",
+		line = 539,
+	},
+	block_00080 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"過ちを犯して囚人となったHENTAIが、更に罪を犯した場合にのみ収容される。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00079",
+		linknext = "block_00081",
+		line = 541,
+	},
+	block_00081 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"チューリップ・プリズンの、その最下層。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00080",
+		linknext = "block_00082",
+		line = 543,
+	},
+	block_00082 = {
+		{"bgtstop"},
+		{"bg", blur=10, time=1000, sync=0, file="piicg39_2a", path=":bg/", ax=834, ay=493, bx=-34, by=-43},
+		{"bg", y=550, time=1000, lv=9, id=9, file="シネスコ6_1", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"bg", y=-550, time=1000, lv=8, id=8, file="シネスコ6_2", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"ex", func="wait", time=1500},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="erodu0131", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「が…………あっ…………ああぁぁぁ……っ！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00081",
+		linknext = "block_00083",
+		line = 553,
+	},
+	block_00083 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"真っ暗で湿気た独房は、畳ふたつ分のスペースしかない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00082",
+		linknext = "block_00084",
+		line = 555,
+	},
+	block_00084 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"食事は少量が1日に3度、すべてが残飯。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00083",
+		linknext = "block_00085",
+		line = 557,
+	},
+	block_00085 = {
+		{"bgtstop"},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="erodu0132", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「ぃ…………うううぅ…………うぅぅぅ……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00084",
+		linknext = "block_00086",
+		line = 562,
+	},
+	block_00086 = {
+		{"bg", x=640, y=-350, blur=10, time=1000, sync=0, file="zpiicg39_2a", path=":bg/", ax=1500, ay=886, bx=-700, by=-436},
+		{"bg", y=550, time=1000, lv=9, id=9, file="シネスコ6_1", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"bg", y=-550, time=1000, lv=8, id=8, file="シネスコ6_2", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"cgact", act="移動", x=-1280, y=700, time=30000, ease="none"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"光もなければ音もない、絶望的な場所。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00085",
+		linknext = "block_00087",
+		line = 569,
+	},
+	block_00087 = {
+		{"bgtstop"},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="erodu0133", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「いぎぃいいい……うぅううっ、うぉぉぅぅいぅ……っ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00086",
+		linknext = "block_00088",
+		line = 574,
+	},
+	block_00088 = {
+		{"se", id=1, file="hara2"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"耳鳴りがするほどの静寂の中で、半狂乱する囚人もいる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00087",
+		linknext = "block_00089",
+		line = 578,
+	},
+	block_00089 = {
+		{"bgtstop"},
+		{"text"},
+		text = {
+			hide = true,
+			vo = {
+				{"vo", file="erodu0134", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「腹がいてぇ……！　暗ぇ……！　腹がいてぇ……！　ここから出してくれぇ！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00088",
+		linknext = "block_00090",
+		line = 583,
+	},
+	block_00090 = {
+		{"se", id=1, file="hara"},
+		{"bg", time=1000, sync=0, file="piicg39_2a", path=":bg/", ax=834, ay=493, bx=-34, by=-43},
+		{"bg", y=550, time=1000, lv=9, id=9, file="シネスコ6_1", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"bg", y=-550, time=1000, lv=8, id=8, file="シネスコ6_2", delay=0, path=":cg/", ax=1000, ay=450, bx=-200, by=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どこからか、エロデューサーの声が聞こえてくる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00089",
+		linknext = "block_00091",
+		line = 591,
+	},
+	block_00091 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"叫んだところでここには誰も助けは来ず、何の意味もない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00090",
+		linknext = "block_00092",
+		line = 593,
+	},
+	block_00092 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"独房に設置された暗視カメラが、ただただ見張っているだけ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00091",
+		linknext = "block_00093",
+		line = 595,
+	},
+	block_00093 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ここは、静寂という名の地獄。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00092",
+		linknext = "block_00094",
+		line = 597,
+	},
+	block_00094 = {
+		{"bgtstop"},
+		{"se", id=1, file="hara"},
+		{"se", id=2, file="hit_door4"},
+		{"text"},
+		text = {
+			vo = {
+				{"vo", file="erodu0135", ch="ERODU"},
+			},
+			ja = {
+				{
+					name = {"エロデューサー"},
+					"「許してぇ！　許してくださぁい！　もう二度と悪いことなんてしないからぁ！　とーちゃん！　かーちゃああぁぁんっ！！　アナルぅううううっ！！！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00093",
+		linknext = "block_00095",
+		line = 605,
+	},
+	block_00095 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"どんな囚人であっても最後は懇願し、3日で音を上げ",
+					{"ruby", text="・・・"},
+					"いい子",
+					{"/ruby"},
+					"になるという――",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00094",
+		linknext = "block_00096",
+		line = 607,
+	},
+	block_00096 = {
+		{"bgm", stop=1, time=3000},
+		{"bg", time=3000, file="piicg39_2a", path=":bg/", ax=834, ay=493, bx=-34, by=-43},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「――――――」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00095",
+		linknext = "block_00097",
+		line = 614,
+	},
+	block_00097 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"オレは今、ここにいる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00096",
+		linknext = "block_00098",
+		line = 616,
+	},
+	block_00098 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"もう何日経過したかも分からない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00097",
+		linknext = "block_00099",
+		line = 618,
+	},
+	block_00099 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"身体の動かし方も、忘れてしまう。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00098",
+		linknext = "block_00100",
+		line = 620,
+	},
+	block_00100 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「………………」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00099",
+		linknext = "block_00101",
+		line = 624,
+	},
+	block_00101 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"時間の感覚が狂う。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00100",
+		linknext = "block_00102",
+		line = 626,
+	},
+	block_00102 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"五体の感覚が狂う。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00101",
+		linknext = "block_00103",
+		line = 628,
+	},
+	block_00103 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"すべてが、狂う。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00102",
+		linknext = "block_00104",
+		line = 630,
+	},
+	block_00104 = {
+		{"bgm", file="bgm38a"},
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"bg", x=300, y=-250, zoom=80, time=300, file="zpiicg39_2a", path=":bg/", ax=1500, ay=886, bx=-700, by=-436},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2a0100", brow="a_brow0005", eyes="a_eyes0016", lips="a_lips0001", ex03="a0084", mw="mw", head="shu_z2a", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「……た、ぁ…………ぃ…………ぅ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00103",
+		linknext = "block_00105",
+		line = 642,
+	},
+	block_00105 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"それでもオレの心は。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00104",
+		linknext = "block_00106",
+		line = 644,
+	},
+	block_00106 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"胸の奥底にある、感情は。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00105",
+		linknext = "block_00107",
+		line = 646,
+	},
+	block_00107 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=83, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0005", eyes="b_eyes0007", lips="b_lips0002", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「ぜっ……い、に……って、や……る……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00106",
+		linknext = "block_00108",
+		line = 656,
+	},
+	block_00108 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"まだ、折れてはいなかった。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00107",
+		linknext = "block_00109",
+		line = 658,
+	},
+	block_00109 = {
+		{"se", id=1, file="ero_kucha2"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"残飯を素手で掴み、口に運ぶ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00108",
+		linknext = "block_00110",
+		line = 662,
+	},
+	block_00110 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=86, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2c0100", brow="c_brow0011", eyes="c_eyes0031", lips="c_lips0011", ex03="c0084", mw="mw", head="shu_z2c", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「ぜった、……に……ム、を……」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00109",
+		linknext = "block_00111",
+		line = 672,
+	},
+	block_00111 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ここで、生き延びるために。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00110",
+		linknext = "block_00112",
+		line = 674,
+	},
+	block_00112 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"ここで、目標を達成させるために。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00111",
+		linknext = "block_00113",
+		line = 676,
+	},
+	block_00113 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=89, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2a0100", brow="a_brow0005", eyes="a_eyes0023", lips="a_lips0002", ex03="a0084", mw="mw", head="shu_z2a", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「せい、させ……て、やる……っ」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00112",
+		linknext = "block_00114",
+		line = 686,
+	},
+	block_00114 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"目から血の涙を流して。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00113",
+		linknext = "block_00115",
+		line = 688,
+	},
+	block_00115 = {
+		{"se", id=1, file="simeru"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"手から血が溢れるほど拳を握りしめ。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00114",
+		linknext = "block_00116",
+		line = 692,
+	},
+	block_00116 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"肺から血を吐き出しながら。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00115",
+		linknext = "block_00117",
+		line = 694,
+	},
+	block_00117 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=92, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0004", eyes="b_eyes0039", lips="b_lips0004", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「絶対、に……ゲーム、を」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00116",
+		linknext = "block_00118",
+		line = 704,
+	},
+	block_00118 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"オレは誓う。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00117",
+		linknext = "block_00119",
+		line = 706,
+	},
+	block_00119 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=95, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0004", eyes="b_eyes0017", lips="b_lips0004", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「完成、させて……や、る――！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00118",
+		linknext = "block_00120",
+		line = 716,
+	},
+	block_00120 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"オレからそれを取り上げる。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00119",
+		linknext = "block_00121",
+		line = 718,
+	},
+	block_00121 = {
+		{"se", id=1, file="tejo6"},
+		{"se", id=2, file="act_hikizuru"},
+		{"cgact", act="移動", zoom=100, time=300, ease="none"},
+		{"cgact", act="振動下", size=-10, time=150},
+		{"fg", ch="柊一郎", mode=1, path=":fg/shu/z2/", file="shu_z2b0100", brow="b_brow0004", eyes="b_eyes0044", lips="b_lips0004", ex03="b0084", mw="mw", head="shu_z2b", lv=5, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「絶対に、ゲーム、を……完成させて、やる――！」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00120",
+		linknext = "block_00122",
+		line = 728,
+	},
+	block_00122 = {
+		{"text"},
+		text = {
+			ja = {
+				{
+					"その、すべてのものを許さない。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00121",
+		linknext = "block_00123",
+		line = 730,
+	},
+	block_00123 = {
+		{"bgm", stop=1, time=2000},
+		{"bg", time=1000, sync=0, file="black", path=":bg/"},
+		{"bg", time=1000, lv=9, id=9, file="cinema01", delay=0, path=":sys/"},
+		{"text"},
+		text = {
+			ja = {
+				{
+					"だから、必ず。",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00122",
+		linknext = "block_00124",
+		line = 737,
+	},
+	block_00124 = {
+		{"ex", func="wait", time=1000},
+		{"se", id=1, file="impact"},
+		{"fg", ch="柊一郎", size="z1", time=300, mode=3, resize=1, path=":fg/shu/z1/", file="shu_z1c0110", brow="c_brow0001", eyes="c_eyes0019", lips="c_lips0002", ex03="c0084", head="shu_z1c", x=300, y=-100, lv=4, id=0},
+		{"text"},
+		text = {
+			ja = {
+				{
+					name = {"柊一郎"},
+					"「物故ろしてやるぜ……ベイビー」",
+					{"rt2"},
+				},
+			},
+		},
+		linkback = "block_00123",
+		linknext = "block_00125",
+		line = 746,
+	},
+	block_00125 = {
+		{"cgdel", id=-1, time=2000},
+		{"cacheclear"},
+		{"colortone", style="reset"},
+		{"bg", time=2000, file="black", path=":bg/"},
+		{"ex", func="wait", time=1500},
+		{"movie", cancel=1, file="op"},
+		{"ex", func="wait", time=10000},
+		{"bg", file="bg_route", time=100, path=":cg/"},
+		{"select", file="d02_ik01_1", pre="route_c_01", cond="g.selecteachroute", text="select"},
+		{"select", file="d04_nk01_1", pre="route_c_02", cond="g.selecteachroute", text="select"},
+		{"select", file="d03_th01_1", pre="route_c_03", cond="g.selecteachroute", text="select"},
+		{"select", file="d02_ik01_1", pre="route_g_01", cond="g.selectgrandroute", text="select"},
+		{"select", file="d04_nk01_1", pre="route_g_02", cond="g.selectgrandroute", text="select"},
+		{"select", file="d03_th01_1", pre="route_g_03", cond="g.selectgrandroute", text="select"},
+		{"select", file="d05_g01_1", pre="route_g_04", cond="g.selectgrandroute", text="select"},
+		{"select", name="d01_c08_6"},
+		{"text"},
+		select = {
+			ja = {
+				"千咲都　ルート",
+				"ノア　　ルート",
+				"妙花　　ルート",
+				"千咲都　ルート",
+				"ノア　　ルート",
+				"妙花　　ルート",
+				"グランドルート",
+				text="分岐",
+			},
+		},
+		linkback = "block_00124",
+		linknext = "block_00126",
+		line = 776,
+	},
+	block_00126 = {
+		{"select", mode="hide"},
+		{"text"},
+		text = {
+			select = {
+			},
+		},
+		linkback = "block_00125",
+		line = 777,
+	},
+	label = {
+		top = { block="block_00000", label=1 },
+		select = { block="block_00125", label=9 },
+	},
+}

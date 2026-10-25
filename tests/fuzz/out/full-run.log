@@ -5,42 +5,29 @@
 1 warning generated.
 == fuzzing: 5000 inputs per parser, 2000 ms deadline, 512 MiB ceiling
 pfs: 9 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
-  peak 0 KiB on input 0 (19 bytes, truncate-tiny, seed built-pf6)
-  peak 0 KiB on input 1 (172 bytes, fill-ff, seed built-pf6)
-  peak 1 KiB on input 2 (232 bytes, open-brackets, seed built-pf2)
-  peak 1 KiB on input 4 (1767 bytes, repeat-line, seed built-pf8)
-  FINDING pfs-error-success-0007: an entry name contains a NUL (160 bytes, zero-range, seed built-pf2-v2)
-  peak 7 KiB on input 12 (524301 bytes, insert-noise, seed root)
-  peak 105 KiB on input 13 (262144 bytes, flip-bytes, seed HENPRI.pfs)
-  peak 1024 KiB on input 42 (159 bytes, half-sjis, seed built-pf2-v2)
-  peak 131072 KiB on input 112 (160 bytes, swap-ranges, seed built-pf2-v2)
-  FINDING pfs-error-success-0149: an entry name contains a NUL (172 bytes, swap-ranges, seed built-pf8)
-  FINDING pfs-error-success-0177: an entry name contains a NUL (160 bytes, zero-range, seed built-pf2-v2)
-  ok 1157, rejected 3800, crash 0, timeout 0, oom 0, silent 0, error-success 43, bad-exception 0
-  slowest 161.3 ms, peak 131072 KiB
-  mutations: flip-bit=265 flip-bytes=280 truncate=247 truncate-tiny=282 insert-noise=269 delete-range=261 duplicate-range=280 swap-ranges=274 zero-range=233 fill-ff=279 length-times-ten=256 length-max=270 append-junk=269 negative-number=229 break-utf8=263 half-sjis=260 open-brackets=261 repeat-line=250 pure-random=272
+  peak 32 KiB on input 0 (172 bytes, fill-ff, seed built-pf6)
+  peak 105 KiB on input 8 (262144 bytes, length-times-ten, seed HENPRI.pfs)
+  peak 1024 KiB on input 9 (1048576 bytes, long-line, seed built-pf8)
+  FINDING pfs-error-success-0069: an entry name contains a NUL (107 bytes, zero-range, seed built-pf5)
+  FINDING pfs-error-success-0105: an entry name contains a NUL (172 bytes, zero-range, seed built-pf9)
+  peak 131072 KiB on input 209 (172 bytes, swap-ranges, seed built-pf5)
+  FINDING pfs-error-success-0800: an entry name contains a NUL (170 bytes, zero-range, seed built-pf4)
+  FINDING pfs-error-success-2198: version 0 (94 bytes, length-times-ten, seed built-pf2-v2)
+  FINDING pfs-error-success-3614: an entry has an empty name (107 bytes, delete-range, seed built-pf5)
+  FINDING pfs-error-success-3707: an entry has an empty name (106 bytes, zero-range, seed built-pf5)
+  FINDING pfs-error-success-4185: an entry has an empty name (95 bytes, zero-range, seed built-pf2-v2)
+  ok 1238, rejected 3729, crash 0, timeout 0, oom 0, silent 0, error-success 33, bad-exception 0
+  slowest 481653.5 ms, peak 131072 KiB
+  mutations: flip-bit=226 flip-bytes=246 truncate=241 truncate-tiny=231 insert-noise=235 delete-range=262 duplicate-range=255 swap-ranges=211 zero-range=256 fill-ff=211 length-times-ten=229 length-max=209 append-junk=264 negative-number=215 break-utf8=220 half-sjis=243 open-brackets=251 repeat-line=233 deep-nest=256 long-line=254 pure-random=252
 ast: 5 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
-  peak 0 KiB on input 0 (19 bytes, truncate-tiny, seed synthetic-chained)
-  peak 2 KiB on input 1 (173 bytes, fill-ff, seed synthetic-chained)
-  peak 217 KiB on input 2 (17199 bytes, open-brackets, seed script_オープニング続き)
-  peak 253 KiB on input 7 (41249 bytes, zero-range, seed d09_hy03)
-  peak 570 KiB on input 11 (64172 bytes, repeat-line, seed d01_c08_6)
-  peak 670 KiB on input 29 (64055 bytes, open-brackets, seed d01_c08_6)
-  peak 673 KiB on input 75 (66813 bytes, append-junk, seed d01_c08_6)
-  peak 868 KiB on input 86 (63707 bytes, repeat-line, seed d01_c08_6)
-  peak 868 KiB on input 358 (63676 bytes, zero-range, seed d01_c08_6)
-  peak 983 KiB on input 645 (67946 bytes, repeat-line, seed d01_c08_6)
-  peak 1181 KiB on input 2080 (85001 bytes, duplicate-range, seed d01_c08_6)
-  peak 1259 KiB on input 2917 (89782 bytes, duplicate-range, seed d01_c08_6)
-  peak 1426 KiB on input 3437 (101992 bytes, duplicate-range, seed d01_c08_6)
-  ok 950, rejected 4050, crash 0, timeout 0, oom 0, silent 0, error-success 0, bad-exception 0
-  slowest 153.6 ms, peak 1426 KiB
-  mutations: flip-bit=270 flip-bytes=284 truncate=228 truncate-tiny=251 insert-noise=258 delete-range=256 duplicate-range=274 swap-ranges=288 zero-range=262 fill-ff=252 length-times-ten=273 length-max=227 append-junk=246 negative-number=272 break-utf8=277 half-sjis=274 open-brackets=253 repeat-line=262 pure-random=293
-iet: 6 seeds, 5000 inputs, rng 1, deadline 2000 ms, ceiling 512 MiB
-  peak 6 KiB on input 0 (1845 bytes, truncate-tiny, seed macro)
-  peak 170 KiB on input 1 (34283 bytes, fill-ff, seed macro)
-  peak 280 KiB on input 4 (40558 bytes, repeat-line, seed scene)
-  peak 286 KiB on input 35 (45491 bytes, duplicate-range, seed scene)
-  peak 544 KiB on input 64 (61812 bytes, duplicate-range, seed scene)
-  peak 554 KiB on input 1589 (71155 bytes, duplicate-range, seed scene)
-  peak 557 KiB on input 4527 (71316 bytes, duplicate-range, seed scene)
+  peak 0 KiB on input 0 (173 bytes, fill-ff, seed synthetic-chained)
+  peak 1 KiB on input 2 (209 bytes, insert-noise, seed synthetic-chained)
+  peak 9 KiB on input 3 (656 bytes, truncate-tiny, seed d09_hy03)
+  peak 94 KiB on input 6 (44114 bytes, repeat-line, seed d09_hy03)
+  peak 408 KiB on input 9 (63676 bytes, fill-ff, seed d01_c08_6)
+  FINDING ast-crash-0012: killed by Illegal instruction: 4 (11376 bytes, deep-nest, seed script_オープニング続き)
+  peak 3749 KiB on input 17 (853941 bytes, long-line, seed d01_c08_6)
+  FINDING ast-crash-0026: killed by Illegal instruction: 4 (11421 bytes, deep-nest, seed d01_c08_6)
+  FINDING ast-crash-0029: killed by Illegal instruction: 4 (11336 bytes, deep-nest, seed synthetic-chained)
+  peak 4129 KiB on input 53 (1048576 bytes, long-line, seed d01_c08_6)
+  FINDING ast-timeout-2593: exceeded the 2000 ms deadline (63675 bytes, half-sjis, seed d01_c08_6)

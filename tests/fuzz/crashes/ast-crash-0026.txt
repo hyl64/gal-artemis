@@ -1,0 +1,9 @@
+parser:   ast
+finding:  crash
+detail:   killed by Illegal instruction: 4
+signal:   4
+input:    11421 bytes
+seed:     /Users/huangyuliang/Documents/gal-engines/artemis/../testdata/artemis-henpri-trial/extracted/script/d01_c08_6.ast
+mutation: deep-nest
+rng:      1 (input index 26)
+repro:    ./build/fuzz repro crashes/ast-crash-0026.bin ast

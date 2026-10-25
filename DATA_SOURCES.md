@@ -597,3 +597,47 @@ Raw probe output for the whole session is kept at `/tmp/scout_log.md`.
   leaks were sought or obtained.
 * Data 3 is R18-adjacent commercial game data; it is retained only as a binary
   format sample, and no executable is present.
+
+## 10. Second title, fully unpacked (2026-10-25, 19:xx)
+
+The 212 MB volume is now in the tree and unpacked, because one question needed
+it: the arrayed `.ast` layout reported **zero** dialogue lines and we assumed the
+text lived in a `lang_NNNNN` file.
+
+**That assumption was wrong.**  There is no `lang_NNNNN` file anywhere in the
+2891 members, and none was needed.  The text sits beside the block array, inside
+the same `.ast`:
+
+```lua
+ast = {
+	{ {"savetitle", text="…"}, {"bg", …}, {"text"}, crc="18ed3701", lang="lang_00000" },
+	…
+	text = {
+		[1] = { ja = { { "さて、今日の放課後はどうするか。" } } },
+		[8] = { name={name="悟"}, ja={ { "「はぎゃあああ…！？」" } } },
+		[9] = { name={name="同級生男子Ａ"}, vo={ {"vo", file="com_mobma_0117"} }, ja={ … } },
+	},
+	label = { … },
+}
+```
+
+The rule that makes the two tables line up: **a block that carries a `{"text"}`
+command consumes the next message number, in block order, starting at 1.**  The
+`lang="lang_NNNNN"` field is a *localisation key*, not a filename - with only the
+Japanese build present it points at nothing.
+
+With that, `asttool dump` on `script/瑠莉-01.ast` reports 100 blocks / 281
+commands / **98 lines**, and `agame --ast-info` over all 21 scripts reports
+2,918 blocks / 6,110 commands / **2,880 lines** / 1,231 voice references.
+
+What this title still does not give us: a rendered screen.  Its UI is Lua-driven
+(`system/ui.asb` + 53 `.lua` files + `psw/ui/ja/**` localisation), and its
+`system/first.iet` boots to `*top` with no text page.  Driving it would mean
+implementing the Lua host API, which is a different project from a format port -
+so this corpus is recorded as **format coverage only**, not a second playable
+title.
+
+Pruned on extraction, as before: `image/hd/{ev,cg,fg,fa,mask,cutin}`,
+`sound/vo`, `sound/bgv`.  Kept: `script/`, `system/`, `psw/`, `image/hd/{bg,sd,rule,anime}`,
+`sound/{bgm,se,sysse}`, `font/`.  The tree is 111 MB; the volume itself stays in
+`raw/`.

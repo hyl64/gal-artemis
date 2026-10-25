@@ -1,0 +1,9 @@
+parser:   pfs
+finding:  error-success
+detail:   an entry has an empty name
+signal:   0
+input:    95 bytes
+seed:     built-pf2-v2
+mutation: zero-range
+rng:      1 (input index 4185)
+repro:    ./build/fuzz repro crashes/pfs-error-success-4185.bin pfs

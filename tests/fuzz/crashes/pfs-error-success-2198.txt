@@ -1,0 +1,9 @@
+parser:   pfs
+finding:  error-success
+detail:   version 0
+signal:   0
+input:    94 bytes
+seed:     built-pf2-v2
+mutation: length-times-ten
+rng:      1 (input index 2198)
+repro:    ./build/fuzz repro crashes/pfs-error-success-2198.bin pfs

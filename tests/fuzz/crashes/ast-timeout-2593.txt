@@ -1,0 +1,9 @@
+parser:   ast
+finding:  timeout
+detail:   exceeded the 2000 ms deadline
+signal:   0
+input:    63675 bytes
+seed:     /Users/huangyuliang/Documents/gal-engines/artemis/../testdata/artemis-henpri-trial/extracted/script/d01_c08_6.ast
+mutation: half-sjis
+rng:      1 (input index 2593)
+repro:    ./build/fuzz repro crashes/ast-timeout-2593.bin ast

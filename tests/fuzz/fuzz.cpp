@@ -354,8 +354,13 @@ namespace
 		std::string error;
 		if(!artemis::ParseIpt(text, ipt, error))
 			return error.empty() ? SilentReject() : Rejected(error);
-		if(ipt.dialect == artemis::IptDialect::Unknown)
-			return ErrorAsSuccess("parsed to dialect Unknown");
+		// Unknown is a *documented* answer, not a failure: ParseIpt reports a table it
+		// could not classify by returning true with dialect Unknown and a note
+		// saying why, and ComposeIpt refuses it with that name.  What would be a
+		// failure is returning Unknown with no explanation at all, which is what
+		// this checks.
+		if(ipt.dialect == artemis::IptDialect::Unknown && ipt.notes.empty())
+			return ErrorAsSuccess("parsed to dialect Unknown with no note saying why");
 		if(ipt.frames.size() > text.size() + 1 || ipt.tiles.size() > text.size() + 1)
 			return ErrorAsSuccess("more frames/tiles than bytes");
 		if((ipt.dialect == artemis::IptDialect::Composite) && ipt.width > 0 && ipt.height > 0)
@@ -755,6 +760,8 @@ namespace
 		kHalfSjis,
 		kOpenBrackets,
 		kRepeatLine,
+		kDeepNest,
+		kLongLine,
 		kPureRandom,
 		kMutationKinds
 	};
@@ -765,7 +772,8 @@ namespace
 			"flip-bit", "flip-bytes", "truncate", "truncate-tiny", "insert-noise",
 			"delete-range", "duplicate-range", "swap-ranges", "zero-range", "fill-ff",
 			"length-times-ten", "length-max", "append-junk", "negative-number",
-			"break-utf8", "half-sjis", "open-brackets", "repeat-line", "pure-random",
+			"break-utf8", "half-sjis", "open-brackets", "repeat-line", "deep-nest",
+			"long-line", "pure-random",
 		};
 		return (kind >= 0 && kind < kMutationKinds) ? names[kind] : "?";
 	}
@@ -818,7 +826,7 @@ namespace
 	}
 
 	std::vector<uint8_t> Mutate(const std::vector<uint8_t>& seed, std::mt19937_64& rng,
-		int kind, int* extraMutations)
+		int kind, int* extraMutations, const std::string& parser)
 	{
 		std::vector<uint8_t> out = seed;
 		// a small stack of extra flips makes every input a little different even
@@ -1028,6 +1036,37 @@ namespace
 			for(size_t i = 0; i < copies; i++)
 				text.insert(lineStart, line);
 			out.assign(text.begin(), text.end());
+			break;
+		}
+		case kDeepNest:
+		{
+			// the shape the resource probes use, in the campaign: thousands of levels
+			// of nesting, which is what turns a recursive reader into a stack overflow
+			// the measured crash thresholds: ~4000 levels under the sanitizers (a
+			// 16 KiB file) and ~32000 in a release build (a 128 KiB file)
+			const size_t levels = 2000 + RandomIndex(rng, 30000);
+			// a document that *starts* where the reader starts, then nests: a bare
+			// `{a={a=` at the top is a syntax error on the first token and reaches no
+			// recursion at all (the first version of this mutator proved that)
+			const std::string key = parser == "ipt" ? "ipt = " : (parser == "ast" ? "ast = " : "x = ");
+			std::string text = key;
+			// one kind of nesting only: mixing in `[{` made half the documents a
+			// syntax error at the first bad level, so nothing ever got deep
+			for(size_t i = 0; i < levels; i++)
+				text += "{a=";
+			text += "1";
+			for(size_t i = 0; i < levels; i++)
+				text += "}";
+			text += "\n";
+			out.assign(text.begin(), text.end());
+			break;
+		}
+		case kLongLine:
+		{
+			// one line with no line break in it at all: the case with no length limit
+			const size_t count = 64 * 1024 + RandomIndex(rng, 4 * 1024 * 1024);
+			for(size_t i = 0; i < count; i++)
+				out.push_back((uint8_t)('a' + (int)(rng() % 26)));
 			break;
 		}
 		case kPureRandom:
@@ -1250,7 +1289,7 @@ namespace
 			const Seed& seed = seeds[RandomIndex(rng, seeds.size())];
 			const int kind = (int)RandomIndex(rng, kMutationKinds);
 			int extras = 0;
-			std::vector<uint8_t> input = Mutate(seed.bytes, rng, kind, &extras);
+			std::vector<uint8_t> input = Mutate(seed.bytes, rng, kind, &extras, parser);
 			stats.inputs++;
 			stats.kindCounts[kind]++;
 			const Result result = RunInChild(runner, input, timeoutMs, ceiling, false);
@@ -1582,12 +1621,14 @@ namespace
 	{
 		// F1: the Lua reader recurses with no depth limit.  Both .ast and .ipt go
 		// through it, so one bug has two front doors.
-		WriteProbe(outDir, "f1-lua-nesting-10000.ast", "ast", "crash (stack overflow)",
+		WriteProbe(outDir, "f1-lua-nesting-40000.ast", "ast", "crash (stack overflow)",
 			"ParseLuaAst -> lua.cpp ParseValue/ParseObject recurse once per nesting "
-			"level; 10000 levels exhaust the 8 MiB stack", NestedLua("ast = ", 10000));
-		WriteProbe(outDir, "f1-lua-nesting-5000.ipt", "ipt", "crash (stack overflow)",
+			"level with no depth limit; 40000 levels (a 160 KiB file) segfault in a "
+			"release build, ~4000 levels crash under the sanitizers",
+			NestedLua("ast = ", 40000));
+		WriteProbe(outDir, "f1-lua-nesting-40000.ipt", "ipt", "crash (stack overflow)",
 			"the same reader behind ParseIpt: a .ipt is also a Lua table",
-			NestedLua("ipt = ", 5000));
+			NestedLua("ipt = ", 40000));
 
 		// F2: a number outside int range is cast to int, which is undefined
 		WriteProbe(outDir, "f2-ipt-canvas-4g.ipt", "ipt", "bad-exception (UB)",
@@ -1599,14 +1640,14 @@ namespace
 		// F3: no line-length limit in the .iet reader
 		{
 			std::vector<uint8_t> bytes;
-			const size_t length = 4u * 1024u * 1024u;
+			const size_t length = 1024u * 1024u;
 			bytes.reserve(length + 8);
 			for(size_t i = 0; i < length; i++)
 				bytes.push_back((uint8_t)('a' + (i % 26)));
 			bytes.push_back('\r');
 			bytes.push_back('\n');
-			WriteProbe(outDir, "f3-iet-one-line-4mb.iet", "iet", "resource (no limit)",
-				"one 4 MiB line is accepted; the 100 MiB probe (run.sh limits) takes "
+			WriteProbe(outDir, "f3-iet-one-line-1mb.iet", "iet", "resource (no limit)",
+				"one 1 MiB line is accepted; the 100 MiB probe (run.sh limits) takes "
 				"2.7 s and 492 MiB, so there is no line-length ceiling", bytes);
 		}
 

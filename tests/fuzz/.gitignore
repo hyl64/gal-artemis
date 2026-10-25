@@ -1,0 +1,3 @@
+# the harness compiles itself in run.sh; nothing here is worth checking in
+build/
+out/

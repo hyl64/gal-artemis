@@ -292,6 +292,13 @@ namespace artemis
 			Scanner scanner;
 			Token token;
 			std::string error;
+			// A recursive-descent reader has one stack frame per nesting level, and
+			// a hostile file can nest without limit: 128 KB of '[[' -free braces
+			// was enough to overflow the stack and take the process down, which for
+			// a compatibility layer means "the game will not open".  Real scripts
+			// nest a handful deep, so a limit this generous costs nothing.
+			static constexpr int kMaxDepth = 200;
+			int depth = 0;
 
 			explicit Parser(const std::string& text) : scanner(text) {}
 
@@ -436,7 +443,18 @@ namespace artemis
 				switch(token.kind)
 				{
 				case Token::Kind::LBrace:
-					return ParseObject(out);
+					if(depth >= kMaxDepth)
+					{
+						error = "nesting deeper than " + std::to_string(kMaxDepth)
+							+ " levels at line " + std::to_string(token.line);
+						return false;
+					}
+					{
+						++depth;
+						const bool ok = ParseObject(out);
+						--depth;
+						return ok;
+					}
 				case Token::Kind::String:
 					out = LuaValue{};
 					out.kind = LuaValue::Kind::String;
