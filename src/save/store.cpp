@@ -2,6 +2,8 @@
 
 #include "store.h"
 
+#include "format.h" // SerializeState / DeserializeState / Sha1Hex
+
 #include "../pngio.h"
 
 #include <cstdio>

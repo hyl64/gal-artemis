@@ -17,7 +17,7 @@ namespace artemis
 		{
 			if(key.empty())
 				return;
-			Mark& mark = m_counts[key];
+			ReadMark& mark = m_counts[key];
 			mark.count++;
 			if(atMs > mark.lastMs)
 				mark.lastMs = atMs;
@@ -111,7 +111,7 @@ namespace artemis
 				const size_t secondSpace = text.find(' ', firstSpace + 1);
 				if(secondSpace == std::string::npos)
 					continue;
-				Mark mark;
+				ReadMark mark;
 				mark.count = atoi(text.substr(0, firstSpace).c_str());
 				mark.lastMs = strtoll(text.substr(firstSpace + 1,
 					secondSpace - firstSpace - 1).c_str(), nullptr, 10);

@@ -296,18 +296,16 @@ namespace artemis
 					if(n > highest)
 						highest = n;
 				}
-				long long next = 1; // 1-based, matching the keys in the real files
-				for(AstBlock& b : out.blocks)
+				// The mapping is per block index, not "consume one message per
+				// {'text'} command": block #i owns message i+1.  A block whose
+				// script omits {'text'} can still own a message, so counting
+				// commands would lose those lines.
+				for(size_t i = 0; i < out.blocks.size(); i++)
 				{
-					bool wantsText = false;
-					for(const AstCommand& c : b.commands)
-						if(c.name == "text")
-							wantsText = true;
-					if(!wantsText || next > highest)
-						continue;
-					const auto it = byIndex.find(next++);
+					const auto it = byIndex.find((long long)i + 1);
 					if(it == byIndex.end())
 						continue;
+					AstBlock& b = out.blocks[i];
 					if(const LuaValue* ja = it->second->field("ja"))
 						ReadTextGroup(*ja, b.lines, b.voices, false);
 					if(const LuaValue* vo = it->second->field("vo"))

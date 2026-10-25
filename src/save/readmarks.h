@@ -44,12 +44,13 @@ namespace artemis
 			static const char* kHeader;
 
 		private:
-			struct Mark
+			// Not called `Mark`: the public method of that name would hide it.
+			struct ReadMark
 			{
 				int count = 0;
 				int64_t lastMs = 0;
 			};
-			std::map<std::string, Mark> m_counts;
+			std::map<std::string, ReadMark> m_counts;
 			int64_t m_total = 0;
 		};
 	}

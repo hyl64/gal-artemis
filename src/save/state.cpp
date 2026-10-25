@@ -54,10 +54,10 @@ namespace artemis
 			out.Set("xscale", Json::MakeNumber(xscale));
 			out.Set("yscale", Json::MakeNumber(yscale));
 			out.Set("alpha", Json::MakeNumber(alpha));
-			Json color = Json::MakeArray();
+			Json colorJson = Json::MakeArray();
 			for(int i = 0; i < 4; i++)
-				color.Push(Json::MakeNumber(color[i]));
-			out.Set("color", std::move(color));
+				colorJson.Push(Json::MakeNumber(color[i]));
+			out.Set("color", std::move(colorJson));
 			out.Set("eventFile", Json::MakeString(eventFile));
 			out.Set("eventLabel", Json::MakeString(eventLabel));
 			out.Set("slot", Json::MakeNumber(slot));
