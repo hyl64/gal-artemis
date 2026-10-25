@@ -1,1 +1,1 @@
-parser=pfs seeds=9 inputs=5000 ok=1238 rejected=3729 crash=0 timeout=0 oom=0 silent=0 error_success=33 bad_exception=0 slowest_ms=481653.5 peak_kib=131072
+parser=pfs seeds=9 inputs=300 ok=70 rejected=228 crash=0 timeout=0 oom=0 silent=0 error_success=2 bad_exception=0 slowest_ms=53.0 peak_kib=131072

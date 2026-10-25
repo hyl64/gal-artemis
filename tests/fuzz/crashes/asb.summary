@@ -1,0 +1,1 @@
+parser=asb seeds=2 inputs=300 ok=252 rejected=48 crash=0 timeout=0 oom=0 silent=0 error_success=0 bad_exception=0 slowest_ms=16.1 peak_kib=27

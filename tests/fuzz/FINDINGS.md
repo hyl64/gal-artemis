@@ -226,3 +226,21 @@ Apple 的 clang 发行版不带 libFuzzer 运行库。所以改用**自写循环
 - **没有跑 libFuzzer 的 10 分钟覆盖率模式**（运行库缺失，见 §8）。替代方案是「结构感知变异 + 每个解析器 5000 条」，覆盖面按变异种类统计，不按边覆盖率统计。
 - **没有 fuzz 渲染/存档/音频层**（`src/render/`、`src/save/`、`src/audio/`）：它们不是「拿字节解析」的层，需要的是别的形态的测试。
 - **没有对 `.iet` 的 Lua 块（`[lua] ... [/lua]`）做真正的 Lua 执行 fuzz**：`[calllua]` 目前是桩，`lua.cpp` 只做表解析，所以命中的是 F1 那条路径。
+
+---
+
+## 2. Status after the fixes (Lead, 2026-10-25 19:20)
+
+| # | state | what changed |
+|---|---|---|
+| F1 | **fixed** | `src/lua.cpp` refuses nesting past 200 levels with a line number. The three `ast-crash-*` inputs now print `unexpected token` and exit 0; the old ones took the process down with SIGSEGV at 128 KB of nested braces. |
+| F2 | **fixed** | `IntValue` in `src/ipt.cpp` rejects out-of-range canvas numbers instead of the int conversion being undefined. |
+| F3 | pending | `.iet` still accepts a 100 MB single line. |
+| F4a | pending | an entry name containing NUL is still accepted. |
+| F4b | pending | `..\\..\\x` in an entry name still escapes the output directory on extract. This is the one worth doing next: it writes outside the tree. |
+| F5 | pending | `entries.reserve(count)` still trusts a count from a 1 KiB file. |
+| - | **gone** | the `ast-timeout-2593` input no longer times out: 0.055 s now (the nesting limit removed the pathological path). |
+
+Two of the five are fixed here rather than by a fuzz session's owner, because the
+session that found them had ended. The rest are recorded above with file:line so
+whoever picks them up does not have to rediscover them.
