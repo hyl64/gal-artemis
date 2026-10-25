@@ -27,6 +27,12 @@
 #include "save/store.h"
 
 #include <chrono>
+
+#ifdef ARTEMIS_SAVE_VM
+#include "render/screen.h"
+#include "render/vm.h"
+#endif
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -83,6 +89,94 @@ namespace
 		state.bgm.volume = 200;
 		return state;
 	}
+
+#ifdef ARTEMIS_SAVE_VM
+	// The claim the whole layer exists for: put the interpreter down mid-scene,
+	// start a new one, and pick up where it left off.  The comparison is the page
+	// text, because two frames can differ in how long a transition was asked for
+	// while saying exactly the same thing.
+	int VmEndToEnd(const std::string& dataDir, int pages)
+	{
+		using namespace artemis;
+		AssetSource assets;
+		std::string error;
+		if(!assets.AddDirectory(dataDir, error))
+			return Fail(error);
+
+		auto runFrom = [&](const std::string& label, int skip, int take,
+			const std::map<std::string, std::string>* vars,
+			std::vector<std::string>& out) -> bool {
+			Vm::Config config;
+			config.assets = &assets;
+			config.bootFile = "first.iet";
+			Vm vm(config);
+			if(!vm.Boot(error))
+				return false;
+			if(!vm.Start("scenario/scene.iet", label, error))
+				return false;
+			if(vars != nullptr)
+				vm.SetVariables(*vars);
+			for(int i = 0; i < skip; i++)
+				if(vm.Next().kind != Vm::Event::Kind::Page)
+					return false;
+			for(int i = 0; i < take; i++)
+			{
+				const Vm::Event event = vm.Next();
+				if(event.kind != Vm::Event::Kind::Page)
+					break;
+				out.push_back(event.speaker + "|" + event.text);
+			}
+			return true;
+		};
+
+		std::vector<std::string> straight;
+		if(!runFrom("", 0, pages, nullptr, straight))
+			return Fail("the uninterrupted run failed: " + error);
+
+		std::vector<std::string> firstHalf;
+		if(!runFrom("", 0, pages / 2, nullptr, firstHalf))
+			return Fail("the first half failed: " + error);
+
+		// The save: where the player is, and the variables as they stand.
+		artemis::save::SaveState state = MakeState(7, false, "", "", pages / 2);
+		state.scriptFile = "scenario/scene.iet";
+		state.startLabel = "";
+		{
+			Vm::Config config;
+			config.assets = &assets;
+			config.bootFile = "first.iet";
+			Vm vm(config);
+			if(!vm.Boot(error) || !vm.Start("scenario/scene.iet", "", error))
+				return Fail("preparing the save failed: " + error);
+			for(int i = 0; i < pages / 2; i++)
+				vm.Next();
+			state.vars = vm.variables();
+		}
+
+		// A new interpreter: boot, jump to the saved label, restore the variables,
+		// then skip the pages already seen.
+		std::vector<std::string> secondHalf;
+		if(!runFrom(state.startLabel, state.pageIndex, pages - pages / 2, &state.vars,
+			secondHalf))
+			return Fail("the resumed run failed: " + error);
+
+		std::vector<std::string> joined = firstHalf;
+		joined.insert(joined.end(), secondHalf.begin(), secondHalf.end());
+		printf("  %-58s %s  (%zu + %zu pages vs %zu straight)\n",
+			"a save resumes the same pages", joined == straight ? "ok" : "FAILED",
+			firstHalf.size(), secondHalf.size(), straight.size());
+		if(joined != straight)
+			failures++;
+		for(size_t i = 0; i < joined.size() && i < straight.size(); i++)
+			if(joined[i] != straight[i])
+			{
+				printf("      first difference at page %zu:\n        straight: %s\n        resumed : %s\n",
+					i, straight[i].substr(0, 60).c_str(), joined[i].substr(0, 60).c_str());
+				break;
+			}
+		return 0;
+	}
+#endif
 
 	int List(const std::string& dir)
 	{
@@ -347,6 +441,24 @@ namespace
 		TestReadMarks(root);
 		TestStrictness(root);
 
+#ifdef ARTEMIS_SAVE_VM
+		{
+			const std::string data = std::string(ARTEMIS_TESTDATA)
+				+ "/artemis-nicolan/extracted";
+			FILE* probe = fopen((data + "/scenario/scene.iet").c_str(), "rb");
+			if(probe != nullptr)
+			{
+				fclose(probe);
+				printf("a save resumes the same pages in a new interpreter\n");
+				VmEndToEnd(data, 6);
+			}
+			else
+				printf("  resume check SKIPPED: %s is not in this checkout\n", data.c_str());
+		}
+#else
+		printf("  resume check SKIPPED: savetool was built without the interpreter\n");
+#endif
+
 		printf("\n%s\n", failures == 0 ? "RESULT: OK" : "RESULT: FAILED");
 		return failures == 0 ? 0 : 1;
 	}
@@ -411,6 +523,18 @@ int main(int argc, char** argv)
 
 	if(command == "list")
 		return List(dir);
+	if(command == "vm-e2e")
+	{
+#ifdef ARTEMIS_SAVE_VM
+		printf("resume check on %s\n", dir.c_str());
+		VmEndToEnd(dir, 6);
+		printf("\n%s\n", failures == 0 ? "RESULT: OK" : "RESULT: FAILED");
+		return failures == 0 ? 0 : 1;
+#else
+		printf("vm-e2e is not built in: this savetool has no interpreter linked\n");
+		return 0;
+#endif
+	}
 	if(command == "load")
 	{
 		if(slot < 0 && !autosave)

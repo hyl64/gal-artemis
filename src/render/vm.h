@@ -155,6 +155,21 @@ namespace artemis
 
 		std::string Get(const std::string& name) const override;
 
+		// Restore a saved variable table (a loaded save).  Assignment only, so a
+		// restore cannot re-run a var's system= side effect.
+		void SetVariables(const std::map<std::string, std::string>& vars)
+		{
+			for(const auto& v : vars)
+				m_vars[v.first] = v.second;
+		}
+
+		// Where the interpreter is, for a save: the script it is inside, the
+		// label it started from and how many pages it has shown.  Restoring is
+		// Start(file, label) then Next() that many times, which is why the count
+		// is part of the record.
+		const std::string& currentFile() const { return m_currentFile; }
+		const std::string& currentLabel() const { return m_currentLabel; }
+
 		const Stats& stats() const { return m_stats; }
 		const std::map<std::string, long long>& unknownTags() const { return m_unknownTags; }
 		const std::map<std::string, long long>& ignoredTags() const { return m_ignoredTags; }
@@ -268,6 +283,8 @@ namespace artemis
 		std::vector<Frame> m_frames;
 		std::vector<bool> m_ifStack;
 		std::vector<std::string> m_chgStack;
+		std::string m_currentFile;  // the script the interpreter is inside
+		std::string m_currentLabel; // the label Start() was given
 		std::string m_textTarget = "adv";
 		std::string m_pageText;
 		std::string m_pageSpeaker;

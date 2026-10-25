@@ -300,6 +300,9 @@ namespace artemis
 	// ---------------------------------------------------------------------------
 	bool Vm::Start(const std::string& file, const std::string& label, std::string& error)
 	{
+		// Remembered so a save can name where the player is.
+		m_currentFile = file;
+		m_currentLabel = label;
 		if(!LoadScript(file, error))
 			return false;
 		const std::string key = NormalizePath(file);
