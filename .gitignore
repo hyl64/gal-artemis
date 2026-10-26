@@ -1,1 +1,2 @@
 build/
+tests/fuzz/crashes/limits-iet-one-line-100mb.bin
